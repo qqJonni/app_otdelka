@@ -1,0 +1,300 @@
+{% extends 'base.html' %}
+{% block title %}Мои квартиры — Штаб отделки{% endblock %}
+
+{% block sidebar %}
+<div class="col-auto col-md-2 sidebar py-3 px-2 d-none d-md-flex flex-column">
+  <ul class="nav flex-column flex-grow-1">
+    <li class="nav-item">
+      <a class="nav-link {% if request.endpoint == 'foreman_dashboard' %}active{% endif %}"
+         href="{{ url_for('foreman_dashboard') }}">
+        <i class="bi bi-house-door"></i> Мои квартиры
+      </a>
+    </li>
+  </ul>
+  <div class="border-top pt-2 mt-2">
+    <a class="nav-link d-flex align-items-center gap-2 {% if request.endpoint == 'profile' %}active{% endif %}"
+       href="{{ url_for('profile') }}">
+      {% if current_user.avatar %}
+        <img src="{{ url_for('static', filename='avatars/' + current_user.avatar) }}"
+             class="sidebar-avatar" alt=""
+             onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'">
+        <span class="sidebar-avatar-circle" style="display:none">{{ current_user.initials }}</span>
+      {% else %}
+        <span class="sidebar-avatar-circle">{{ current_user.initials }}</span>
+      {% endif %}
+      <span class="small">Профиль</span>
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Заголовок ── #}
+<div class="d-flex align-items-baseline gap-2 mb-3">
+  <h4 class="fw-bold mb-0"><i class="bi bi-house-door me-2"></i>Мои квартиры</h4>
+  <span class="text-muted small d-none d-sm-inline">{{ current_user.full_name }}</span>
+</div>
+
+{% if apt_data %}
+
+{# ── Сводка ── #}
+<div class="card p-3 mb-4">
+  <div class="row text-center g-0">
+    <div class="col border-end">
+      <div class="fw-bold fs-4 text-primary">{{ stats.total }}</div>
+      <div class="text-muted small">Всего</div>
+    </div>
+    <div class="col border-end">
+      <div class="fw-bold fs-4 text-warning">{{ stats.in_progress }}</div>
+      <div class="text-muted small">В работе</div>
+    </div>
+    <div class="col">
+      <div class="fw-bold fs-4 text-success">{{ stats.completed }}</div>
+      <div class="text-muted small">Завершено</div>
+    </div>
+  </div>
+</div>
+
+{# ── Аккордеон квартир ── #}
+<div class="accordion accordion-flush" id="aptAccordion">
+  {% for item in apt_data %}
+  {% set apt    = item.apt %}
+  {% set stages = item.stages %}
+  {% set colId  = 'apt-collapse-' ~ apt.id %}
+
+  <div class="apt-card mb-3">
+
+    {# ── Заголовок карточки (кнопка-аккордеон) ── #}
+    <button class="apt-card__header w-100 text-start border-0 bg-white collapsed"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#{{ colId }}"
+            aria-expanded="false"
+            aria-controls="{{ colId }}">
+
+      <div class="d-flex align-items-center gap-3">
+
+        {# Номер + ЖК #}
+        <div class="flex-grow-1 min-w-0">
+          <div class="fw-bold fs-5 lh-1 mb-1">Кв. {{ apt.number }}</div>
+          <div class="text-muted small">
+            {{ apt.building_name }}
+            {% if apt.building_address %}&nbsp;·&nbsp;{{ apt.building_address }}{% endif %}
+          </div>
+
+          {# Прогресс-бар #}
+          <div class="d-flex align-items-center gap-2 mt-2">
+            <div class="progress flex-grow-1" style="height:6px">
+              <div class="progress-bar bg-success" style="width:{{ item.pct }}%"></div>
+            </div>
+            <span class="text-muted small text-nowrap" style="min-width:60px">
+              {{ item.done }} из {{ item.total }}
+            </span>
+          </div>
+        </div>
+
+        {# Стрелка раскрытия #}
+        <div class="apt-card__arrow text-muted flex-shrink-0">
+          <i class="bi bi-chevron-down fs-5"></i>
+        </div>
+      </div>
+    </button>
+
+    {# ── Раскрывающаяся часть с этапами ── #}
+    <div id="{{ colId }}" class="collapse" data-bs-parent="#aptAccordion">
+      <div class="apt-card__body">
+        {% if stages %}
+        <div class="table-responsive">
+          <table class="table table-hover mb-0 align-middle">
+            <thead>
+              <tr>
+                <th>Этап</th>
+                <th>Статус</th>
+                <th class="d-none d-sm-table-cell">Дедлайн</th>
+                <th>Действие</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for s in stages %}
+              {% set lbl = STATUS_LABEL[s.status] %}
+              <tr>
+
+                {# Название + кнопка «Состав работ» #}
+                <td>
+                  <span class="{% if s.status == 'overdue' %}text-danger fw-semibold{% endif %}">
+                    {{ s.stage_name }}
+                  </span>
+                  {% if s.work_description and s.work_description.strip() %}
+                  <button type="button"
+                          class="btn btn-link btn-sm p-0 ms-1 text-muted align-baseline"
+                          data-bs-toggle="modal"
+                          data-bs-target="#workModal"
+                          data-stage-name="{{ s.stage_name }}"
+                          data-work-desc="{{ s.work_description | e }}"
+                          title="Состав работ">
+                    <i class="bi bi-info-circle-fill"></i>
+                  </button>
+                  {% endif %}
+                  {# Дедлайн под названием на xs #}
+                  <div class="d-sm-none text-muted small mt-1">
+                    {{ s.deadline if s.deadline else '—' }}
+                  </div>
+                </td>
+
+                {# Бейдж статуса #}
+                <td class="text-nowrap">
+                  <span class="badge bg-{{ lbl[1] }}">{{ lbl[0] }}</span>
+                </td>
+
+                {# Дедлайн (скрыт на xs) #}
+                <td class="small d-none d-sm-table-cell text-nowrap
+                            {% if s.status == 'overdue' %}text-danger fw-semibold
+                            {% else %}text-muted{% endif %}">
+                  {{ s.deadline if s.deadline else '—' }}
+                </td>
+
+                {# Кнопка действия #}
+                <td class="text-nowrap">
+                  {% if s.status == 'not_started' %}
+                    <form method="post"
+                          action="{{ url_for('foreman_stage_action', stage_id=s.id) }}">
+                      <button type="submit" class="btn btn-success action-btn">
+                        <i class="bi bi-play-fill me-1"></i>
+                        <span class="d-none d-sm-inline">Начать</span>
+                      </button>
+                    </form>
+
+                  {% elif s.status == 'overdue' %}
+                    <form method="post"
+                          action="{{ url_for('foreman_stage_action', stage_id=s.id) }}"
+                          onsubmit="return confirm('Начать просроченный этап «{{ s.stage_name }}»?')">
+                      <button type="submit" class="btn btn-danger action-btn">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                        <span class="d-none d-sm-inline">Начать</span>
+                      </button>
+                    </form>
+
+                  {% elif s.status == 'in_progress' %}
+                    <form method="post"
+                          action="{{ url_for('foreman_stage_action', stage_id=s.id) }}"
+                          onsubmit="return confirm('Завершить этап «{{ s.stage_name }}»?')">
+                      <button type="submit" class="btn btn-primary action-btn">
+                        <i class="bi bi-check-lg me-1"></i>
+                        <span class="d-none d-sm-inline">Завершить</span>
+                      </button>
+                    </form>
+
+                  {% else %}{# done #}
+                    <span class="text-success small text-nowrap">
+                      <i class="bi bi-check-circle-fill me-1"></i>
+                      {{ s.completed_at[:10] if s.completed_at else 'Завершён' }}
+                    </span>
+                  {% endif %}
+                </td>
+
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="text-muted px-3 py-2 mb-0">Этапов пока нет.</p>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>{# /apt-card #}
+  {% endfor %}
+</div>{# /accordion #}
+
+{% else %}
+{# ── Пустое состояние ── #}
+<div class="text-center py-5">
+  <i class="bi bi-inbox text-secondary" style="font-size:3rem"></i>
+  <p class="mt-3 text-muted">У вас пока нет назначенных квартир.</p>
+  <p class="text-muted small">Обратитесь к администратору.</p>
+</div>
+{% endif %}
+
+
+{# ── Модальное окно «Состав работ» ── #}
+<div class="modal fade" id="workModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-clipboard-text me-2 text-primary"></i>Состав работ
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <h6 class="fw-bold mb-3 text-primary" id="workModalStageName"></h6>
+        <p id="workModalDesc" class="mb-0" style="white-space:pre-line;line-height:1.7"></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+<style>
+  /* ── Карточка квартиры ───────────────────────────── */
+  .apt-card {
+    border-radius: 12px;
+    box-shadow: 0 1px 6px rgba(0,0,0,.09);
+    overflow: hidden;
+    transition: box-shadow .15s ease;
+  }
+  .apt-card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,.13);
+  }
+
+  /* Кнопка-заголовок */
+  .apt-card__header {
+    padding: 16px 20px;
+    cursor: pointer;
+    border-radius: 12px;
+    transition: background .12s ease;
+  }
+  .apt-card__header:hover { background: #f5f7fa !important; }
+  .apt-card__header:focus { outline: none; box-shadow: 0 0 0 3px rgba(13,110,253,.25); }
+
+  /* Стрелка поворачивается при раскрытии */
+  .apt-card__header[aria-expanded="true"]  .apt-card__arrow i { transform: rotate(180deg); }
+  .apt-card__arrow i { transition: transform .25s ease; display: inline-block; }
+
+  /* Тело карточки */
+  .apt-card__body {
+    border-top: 1px solid #e9ecef;
+    background: #fff;
+  }
+
+  /* Кнопки действий: минимум 40px высоты для удобного нажатия пальцем */
+  .action-btn {
+    min-height: 40px;
+    min-width: 40px;
+    padding: 6px 12px;
+  }
+  @media (max-width: 576px) {
+    .apt-card__header { padding: 14px 16px; }
+    .action-btn { padding: 8px 10px; }
+  }
+</style>
+<script>
+  // Модалка «Состав работ»
+  const workModal = document.getElementById('workModal')
+  if (workModal) {
+    workModal.addEventListener('show.bs.modal', e => {
+      const btn = e.relatedTarget
+      workModal.querySelector('#workModalStageName').textContent = btn.dataset.stageName
+      workModal.querySelector('#workModalDesc').textContent      = btn.dataset.workDesc
+    })
+  }
+</script>
+{% endblock %}

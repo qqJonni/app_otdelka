@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% block title %}Квартиры — {{ building.name }}{% endblock %}
+{% block sidebar %}{% include 'admin/_sidebar.html' %}{% endblock %}
+
+{% block content %}
+<div class="mb-2">
+  <a href="{{ url_for('admin_buildings') }}" class="text-decoration-none text-muted small">
+    <i class="bi bi-arrow-left"></i> Жилые комплексы
+  </a>
+</div>
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h4 class="fw-bold mb-0"><i class="bi bi-buildings me-2"></i>{{ building.name }}</h4>
+    {% if building.address %}<small class="text-muted">{{ building.address }}</small>{% endif %}
+  </div>
+  <a href="{{ url_for('admin_apartment_add', bid=building.id) }}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-lg me-1"></i><span class="d-none d-sm-inline">Добавить квартиру</span><span class="d-sm-none">Добавить</span>
+  </a>
+</div>
+
+{% if apartments %}
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0 align-middle">
+      <thead>
+        <tr>
+          <th>№ кв.</th>
+          <th class="d-none d-md-table-cell">Бригадир</th>
+          <th class="d-none d-lg-table-cell">Плановые даты</th>
+          <th>Прогресс</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for apt in apartments %}
+        {% set stat = apt_stats[apt.id] %}
+        <tr>
+          <td>
+            <div class="fw-semibold">Кв. {{ apt.number }}</div>
+            {# Бригадир — показываем под номером на мобильных #}
+            <div class="text-muted small d-md-none">
+              {{ apt.foreman_name or 'без бригадира' }}
+            </div>
+          </td>
+          <td class="d-none d-md-table-cell">
+            {{ apt.foreman_name or '<span class="text-muted">не назначен</span>'|safe }}
+          </td>
+          <td class="small text-muted d-none d-lg-table-cell">
+            {% if apt.plan_start_date %}{{ apt.plan_start_date }}{% endif %}
+            {% if apt.plan_start_date and apt.plan_end_date %} — {% endif %}
+            {% if apt.plan_end_date %}{{ apt.plan_end_date }}{% endif %}
+            {% if not apt.plan_start_date and not apt.plan_end_date %}—{% endif %}
+          </td>
+          <td style="min-width:110px">
+            <div class="d-flex align-items-center gap-2">
+              <div class="progress flex-grow-1">
+                <div class="progress-bar bg-success" style="width:{{ stat.pct }}%"></div>
+              </div>
+              <small class="text-muted text-nowrap">{{ stat.done }}/{{ stat.total }}</small>
+            </div>
+          </td>
+          <td class="text-end text-nowrap">
+            <a href="{{ url_for('admin_stages', apt_id=apt.id) }}" class="btn btn-outline-secondary btn-sm">
+              <i class="bi bi-list-task"></i><span class="d-none d-sm-inline ms-1">Этапы</span>
+            </a>
+            <a href="{{ url_for('admin_apartment_edit', apt_id=apt.id) }}" class="btn btn-outline-primary btn-sm">
+              <i class="bi bi-pencil"></i>
+            </a>
+            <form method="post" action="{{ url_for('admin_apartment_delete', apt_id=apt.id) }}"
+                  class="d-inline" onsubmit="return confirm('Удалить квартиру №{{ apt.number }}?')">
+              <button class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i></button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-door-open fs-1"></i>
+  <p class="mt-2">Квартир пока нет.</p>
+  <a href="{{ url_for('admin_apartment_add', bid=building.id) }}" class="btn btn-primary">Добавить квартиру</a>
+</div>
+{% endif %}
+{% endblock %}

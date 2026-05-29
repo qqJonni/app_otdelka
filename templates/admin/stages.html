@@ -1,0 +1,193 @@
+{% extends 'base.html' %}
+{% block title %}Этапы — Кв. {{ apt.number }}{% endblock %}
+{% block sidebar %}{% include 'admin/_sidebar.html' %}{% endblock %}
+
+{% block content %}
+<div class="mb-2 small text-muted">
+  <a href="{{ url_for('admin_buildings') }}" class="text-decoration-none text-muted">ЖК</a>
+  <i class="bi bi-chevron-right mx-1"></i>
+  <a href="{{ url_for('admin_apartments', bid=building.id) }}" class="text-decoration-none text-muted">{{ building.name }}</a>
+  <i class="bi bi-chevron-right mx-1"></i>
+  Кв. {{ apt.number }}
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="fw-bold mb-0"><i class="bi bi-list-task me-2"></i>Квартира №{{ apt.number }}</h4>
+  <div class="d-flex gap-2">
+    {% if available %}
+    <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#addStageModal">
+      <i class="bi bi-plus-lg me-1"></i><span class="d-none d-sm-inline">Добавить этап</span>
+    </button>
+    {% endif %}
+    <a href="{{ url_for('admin_apartment_edit', apt_id=apt.id) }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-pencil me-1"></i><span class="d-none d-sm-inline">Редактировать</span>
+    </a>
+  </div>
+</div>
+
+{% if stages %}
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0 align-middle">
+      <thead>
+        <tr>
+          <th style="width:72px" class="text-center">Порядок</th>
+          <th>Этап</th>
+          <th class="d-none d-md-table-cell">Объём, кв.м</th>
+          <th>Дедлайн</th>
+          <th>Статус</th>
+          <th class="d-none d-lg-table-cell">Начат</th>
+          <th class="d-none d-lg-table-cell">Завершён</th>
+          <th style="width:80px"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in stages %}
+        {% set lbl = STATUS_LABEL[s.status] %}
+        {% set is_first = loop.first %}
+        {% set is_last  = loop.last %}
+        <tr>
+          {# ── Стрелки сортировки ── #}
+          <td class="text-center text-nowrap p-1">
+            <form method="post"
+                  action="{{ url_for('admin_stage_move', stage_id=s.id, direction='up') }}"
+                  class="d-inline">
+              <button class="btn btn-sm btn-outline-secondary py-0 px-1 {% if is_first %}disabled{% endif %}"
+                      {% if is_first %}type="button"{% endif %}
+                      title="Выше">
+                <i class="bi bi-chevron-up"></i>
+              </button>
+            </form>
+            <form method="post"
+                  action="{{ url_for('admin_stage_move', stage_id=s.id, direction='down') }}"
+                  class="d-inline ms-1">
+              <button class="btn btn-sm btn-outline-secondary py-0 px-1 {% if is_last %}disabled{% endif %}"
+                      {% if is_last %}type="button"{% endif %}
+                      title="Ниже">
+                <i class="bi bi-chevron-down"></i>
+              </button>
+            </form>
+          </td>
+
+          {# ── Название этапа ── #}
+          <td>
+            <span class="fw-semibold">{{ s.stage_name }}</span>
+            {% if s.work_description %}
+            <i class="bi bi-info-circle text-muted ms-1"
+               style="cursor:default; font-size:.85rem"
+               title="{{ s.work_description }}"
+               data-bs-toggle="tooltip" data-bs-placement="right"></i>
+            {% endif %}
+            {% if s.volume_sqm %}
+            <div class="text-muted small d-md-none">{{ s.volume_sqm }} кв.м</div>
+            {% endif %}
+          </td>
+
+          <td class="d-none d-md-table-cell">{{ s.volume_sqm if s.volume_sqm else '—' }}</td>
+
+          <td class="small text-nowrap">
+            {% if s.deadline %}
+              <span class="{% if s.status == 'overdue' %}text-danger fw-semibold{% else %}text-muted{% endif %}">
+                {{ s.deadline }}
+              </span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+
+          <td><span class="badge bg-{{ lbl[1] }}">{{ lbl[0] }}</span></td>
+
+          <td class="small text-muted d-none d-lg-table-cell">{{ s.started_at[:10] if s.started_at else '—' }}</td>
+          <td class="small text-muted d-none d-lg-table-cell">{{ s.completed_at[:10] if s.completed_at else '—' }}</td>
+
+          {# ── Кнопки редакт. и удал. ── #}
+          <td class="text-end text-nowrap p-1">
+            <a href="{{ url_for('admin_stage_edit', stage_id=s.id) }}"
+               class="btn btn-outline-primary btn-sm" title="Редактировать">
+              <i class="bi bi-pencil"></i>
+            </a>
+            <form method="post"
+                  action="{{ url_for('admin_stage_delete', stage_id=s.id) }}"
+                  class="d-inline"
+                  onsubmit="return confirm('Удалить этап «{{ s.stage_name }}» из квартиры?')">
+              <button class="btn btn-outline-danger btn-sm" title="Удалить этап">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-list-task fs-1"></i>
+  <p class="mt-2">Этапов пока нет.</p>
+  {% if available %}
+  <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addStageModal">
+    <i class="bi bi-plus-lg me-1"></i>Добавить этап
+  </button>
+  {% endif %}
+</div>
+{% endif %}
+
+
+{# ══ Модальное окно: добавить этап ══════════════════════════════ #}
+{% if available %}
+<div class="modal fade" id="addStageModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" action="{{ url_for('admin_stage_add', apt_id=apt.id) }}">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi bi-plus-circle me-2 text-success"></i>Добавить этап
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Этап <span class="text-danger">*</span></label>
+            <select name="stage_name" class="form-select" required>
+              <option value="">— выбрать из справочника —</option>
+              {% for t in available %}
+              <option value="{{ t.name }}">{{ t.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="row g-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold">Дедлайн</label>
+              <input type="date" name="deadline" class="form-control">
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">Объём, кв.м</label>
+              <input type="number" step="0.01" min="0" name="volume_sqm"
+                     class="form-control" placeholder="0">
+            </div>
+          </div>
+          <div class="form-text mt-2">
+            Этап добавится в конец списка. Порядок можно изменить стрелками в таблице.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+          <button type="submit" class="btn btn-success">
+            <i class="bi bi-plus-lg me-1"></i>Добавить
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+    new bootstrap.Tooltip(el, { trigger: 'hover' })
+  })
+</script>
+{% endblock %}

@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block title %}Гостевые доступы{% endblock %}
+{% block sidebar %}{% include 'admin/_sidebar.html' %}{% endblock %}
+
+{% block content %}
+<h4 class="fw-bold mb-4"><i class="bi bi-key me-2"></i>Гостевые доступы</h4>
+
+<div class="card p-3 mb-4" style="max-width:500px">
+  <h6 class="fw-bold mb-3">Создать доступ для ЖК</h6>
+  <form method="post" action="{{ url_for('admin_guest_token_create') }}" class="d-flex gap-2">
+    <select name="building_id" class="form-select" required>
+      <option value="">— выбрать ЖК —</option>
+      {% for b in buildings %}
+      <option value="{{ b.id }}">{{ b.name }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-primary btn-sm px-3 text-nowrap">
+      <i class="bi bi-plus-lg me-1"></i>Создать
+    </button>
+  </form>
+</div>
+
+{% if tokens %}
+<div class="card">
+  <table class="table table-hover mb-0 align-middle">
+    <thead>
+      <tr>
+        <th>ЖК</th>
+        <th>Ссылка для гостя</th>
+        <th>Создан</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in tokens %}
+      <tr>
+        <td class="fw-semibold">{{ t.building_name }}</td>
+        <td>
+          {% set link = request.host_url.rstrip('/') + '/guest/' + t.token %}
+          <a href="/guest/{{ t.token }}" target="_blank" class="font-monospace small text-break">
+            /guest/{{ t.token }}
+          </a>
+          <button class="btn btn-sm btn-outline-secondary ms-1 py-0"
+                  onclick="navigator.clipboard.writeText('{{ link }}');this.innerHTML='<i class=\'bi bi-check-lg\'></i>'"
+                  title="Скопировать">
+            <i class="bi bi-clipboard"></i>
+          </button>
+        </td>
+        <td class="small text-muted">{{ t.created_at[:10] }}</td>
+        <td class="text-end">
+          <form method="post" action="{{ url_for('admin_guest_token_delete', tid=t.id) }}"
+                onsubmit="return confirm('Удалить ссылку? Гость потеряет доступ.')">
+            <button class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i></button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="text-muted">Гостевых доступов пока нет.</p>
+{% endif %}
+{% endblock %}

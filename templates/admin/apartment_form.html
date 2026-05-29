@@ -1,0 +1,182 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Редактировать' if apartment else 'Новая' }} квартира{% endblock %}
+{% block sidebar %}{% include 'admin/_sidebar.html' %}{% endblock %}
+
+{% block content %}
+<div class="mb-2">
+  <a href="{{ url_for('admin_apartments', bid=building.id) }}" class="text-decoration-none text-muted small">
+    <i class="bi bi-arrow-left"></i> {{ building.name }}
+  </a>
+</div>
+<h4 class="fw-bold mb-4">
+  {{ 'Редактировать квартиру' if apartment else 'Новая квартира' }}
+</h4>
+
+<form method="post">
+<div class="row g-4">
+
+  {# ── Основные поля ── #}
+  <div class="col-12 col-md-5">
+    <div class="card p-4">
+      <h6 class="fw-semibold mb-3 text-muted text-uppercase" style="font-size:.75rem">Основные данные</h6>
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Номер квартиры <span class="text-danger">*</span></label>
+        <input type="text" name="number" class="form-control"
+               value="{{ apartment.number if apartment else '' }}" required>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Плановая дата начала</label>
+        <input type="date" name="plan_start_date" class="form-control"
+               value="{{ apartment.plan_start_date if apartment else '' }}">
+        {% if not apartment %}
+        <div class="form-text">Отображается в карточке квартиры.</div>
+        {% endif %}
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Плановая дата окончания</label>
+        <input type="date" name="plan_end_date" class="form-control"
+               value="{{ apartment.plan_end_date if apartment else '' }}">
+        <div class="form-text">Общий срок сдачи. Не влияет на дедлайны этапов.</div>
+      </div>
+      <div class="mb-4">
+        <label class="form-label fw-semibold">Бригадир</label>
+        <select name="foreman_id" class="form-select">
+          <option value="">— не назначен —</option>
+          {% for f in foremen %}
+          <option value="{{ f.id }}"
+            {% if apartment and apartment.foreman_id == f.id %}selected{% endif %}>
+            {{ f.full_name }} ({{ f.username }})
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check-lg me-1"></i>{{ 'Сохранить' if apartment else 'Создать квартиру' }}
+        </button>
+        <a href="{{ url_for('admin_apartments', bid=building.id) }}" class="btn btn-outline-secondary">Отмена</a>
+      </div>
+
+      {% if apartment %}
+      <div class="alert alert-warning mt-3 mb-0 small">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        Изменение дат квартиры <strong>не пересчитывает</strong> дедлайны этапов.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Выбор этапов (только при создании) ── #}
+  {% if not apartment and templates %}
+  <div class="col-12 col-md-7">
+    <div class="card p-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="fw-semibold mb-0 text-muted text-uppercase" style="font-size:.75rem">
+          Этапы для этой квартиры
+        </h6>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="btnCheckAll">
+            <i class="bi bi-check2-all me-1"></i>Все
+          </button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="btnUncheckAll">
+            <i class="bi bi-x-lg me-1"></i>Сбросить
+          </button>
+        </div>
+      </div>
+      <p class="text-muted small mb-3">
+        Отметьте нужные этапы. Укажите дедлайн и объём или оставьте пустыми.
+      </p>
+
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead>
+            <tr>
+              <th style="width:32px">
+                <input type="checkbox" class="form-check-input" id="checkAll" checked>
+              </th>
+              <th>Этап</th>
+              <th style="min-width:130px">Дедлайн</th>
+              <th style="min-width:90px">Объём, кв.м</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in templates %}
+            <tr class="stage-check-row">
+              <td>
+                <input type="checkbox" class="form-check-input stage-checkbox"
+                       name="stage_sel_{{ t.id }}" value="1" checked
+                       id="chk_{{ t.id }}">
+              </td>
+              <td>
+                <label for="chk_{{ t.id }}" class="mb-0 cursor-pointer">
+                  {{ t.name }}
+                </label>
+              </td>
+              <td>
+                <input type="date" name="stage_deadline_{{ t.id }}"
+                       class="form-control form-control-sm stage-field">
+              </td>
+              <td>
+                <input type="number" step="0.01" min="0"
+                       name="stage_volume_{{ t.id }}" placeholder="0"
+                       class="form-control form-control-sm stage-field">
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>{# /row #}
+</form>
+{% endblock %}
+
+{% block scripts %}
+{% if not apartment %}
+<script>
+  // «Выбрать все» / «Сбросить»
+  document.getElementById('btnCheckAll').addEventListener('click', () => {
+    document.querySelectorAll('.stage-checkbox').forEach(c => c.checked = true)
+    syncRows()
+  })
+  document.getElementById('btnUncheckAll').addEventListener('click', () => {
+    document.querySelectorAll('.stage-checkbox').forEach(c => c.checked = false)
+    syncRows()
+  })
+
+  // Главный чекбокс в шапке
+  document.getElementById('checkAll').addEventListener('change', function() {
+    document.querySelectorAll('.stage-checkbox').forEach(c => c.checked = this.checked)
+    syncRows()
+  })
+
+  // Каждый чекбокс — затемняем строку если снят
+  document.querySelectorAll('.stage-checkbox').forEach(cb => {
+    cb.addEventListener('change', syncRows)
+  })
+
+  function syncRows() {
+    document.querySelectorAll('.stage-check-row').forEach(row => {
+      const cb = row.querySelector('.stage-checkbox')
+      const fields = row.querySelectorAll('.stage-field')
+      if (cb.checked) {
+        row.classList.remove('opacity-50')
+        fields.forEach(f => f.disabled = false)
+      } else {
+        row.classList.add('opacity-50')
+        fields.forEach(f => { f.disabled = true; f.value = '' })
+      }
+    })
+  }
+</script>
+<style>
+  .cursor-pointer { cursor: pointer; }
+  .opacity-50 { opacity: .45; }
+</style>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block title %}Редактировать этап{% endblock %}
+{% block sidebar %}{% include 'admin/_sidebar.html' %}{% endblock %}
+
+{% block content %}
+<div class="mb-2 small text-muted">
+  <a href="{{ url_for('admin_buildings') }}" class="text-decoration-none text-muted">Жилые комплексы</a>
+  <i class="bi bi-chevron-right mx-1"></i>
+  <a href="{{ url_for('admin_apartments', bid=building.id) }}" class="text-decoration-none text-muted">{{ building.name }}</a>
+  <i class="bi bi-chevron-right mx-1"></i>
+  <a href="{{ url_for('admin_stages', apt_id=apt.id) }}" class="text-decoration-none text-muted">Кв. {{ apt.number }}</a>
+  <i class="bi bi-chevron-right mx-1"></i>
+  Редактировать этап
+</div>
+
+<h4 class="fw-bold mb-4">Этап: {{ stage.stage_name }}</h4>
+
+<div class="card p-4" style="max-width:520px">
+  <form method="post">
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Объём, кв.м</label>
+      <input type="number" step="0.01" min="0" name="volume_sqm" class="form-control"
+             value="{{ stage.volume_sqm if stage.volume_sqm else '' }}">
+    </div>
+    <div class="mb-3">
+      <label class="form-label fw-semibold">
+        Дедлайн
+        <span class="text-muted fw-normal small ms-1">— индивидуальный для этого этапа</span>
+      </label>
+      <input type="date" name="deadline" class="form-control"
+             value="{{ stage.deadline if stage.deadline else '' }}">
+      <div class="form-text">Оставьте пустым — этап не будет считаться просроченным.</div>
+    </div>
+    <div class="mb-4">
+      <label class="form-label fw-semibold">
+        Состав работ
+        <span class="text-muted fw-normal small ms-1">— виден только бригадиру</span>
+      </label>
+      <textarea name="work_description" rows="5" class="form-control"
+                placeholder="Опишите требования и порядок выполнения работ...">{{ stage.work_description or '' }}</textarea>
+    </div>
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check-lg me-1"></i>Сохранить
+    </button>
+    <a href="{{ url_for('admin_stages', apt_id=apt.id) }}" class="btn btn-outline-secondary ms-2">Отмена</a>
+  </form>
+</div>
+{% endblock %}

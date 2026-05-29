@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% block title %}Справочник материалов{% endblock %}
+{% block sidebar %}{% include 'admin/_sidebar.html' %}{% endblock %}
+
+{% block content %}
+<h4 class="fw-bold mb-4"><i class="bi bi-box-seam me-2"></i>Справочник материалов</h4>
+
+<div class="card p-3 mb-4">
+  <h6 class="fw-bold mb-3">Добавить норму расхода</h6>
+  <form method="post" action="{{ url_for('admin_material_add') }}">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold">Этап</label>
+        <select name="stage_name" class="form-select form-select-sm" required>
+          <option value="">— выбрать —</option>
+          {% for s in stages %}
+          <option value="{{ s.name }}">{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold">Материал</label>
+        <input type="text" name="material_name" class="form-control form-control-sm"
+               placeholder="Название материала" required>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold">Норма на 1 кв.м</label>
+        <input type="number" step="0.001" min="0" name="norm_per_sqm"
+               class="form-control form-control-sm" placeholder="0.00" required>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold">Единица</label>
+        <input type="text" name="unit" class="form-control form-control-sm"
+               placeholder="кг / л / шт" value="кг">
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-primary btn-sm w-100">
+          <i class="bi bi-plus-lg me-1"></i>Добавить
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+
+{% if norms %}
+<div class="card">
+  <table class="table table-hover mb-0 align-middle">
+    <thead>
+      <tr>
+        <th>Этап</th>
+        <th>Материал</th>
+        <th>Норма на 1 кв.м</th>
+        <th>Ед. изм.</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for n in norms %}
+      <tr>
+        <td class="text-muted small">{{ n.stage_name }}</td>
+        <td class="fw-semibold">{{ n.material_name }}</td>
+        <td>{{ n.norm_per_sqm }}</td>
+        <td><span class="badge bg-light text-dark border">{{ n.unit }}</span></td>
+        <td class="text-end">
+          <form method="post" action="{{ url_for('admin_material_delete', nid=n.id) }}"
+                onsubmit="return confirm('Удалить норму?')" class="d-inline">
+            <button class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i></button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="text-muted">Нормы расхода не заданы.</p>
+{% endif %}
+{% endblock %}

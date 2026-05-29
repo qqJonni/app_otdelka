@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Штаб отделки{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body { background: #f8f9fa; }
+
+    /* ── Бренд-ссылка в навбаре ──────────────────────── */
+    .navbar-brand { font-weight: 700; letter-spacing: .5px; }
+    .navbar-brand:hover { opacity: .85; text-decoration: none; }
+
+    /* ── Десктопная боковая панель ───────────────────── */
+    .sidebar { min-height: calc(100vh - 56px); background: #fff; border-right: 1px solid #dee2e6; }
+    .sidebar .nav-link { color: #495057; border-radius: 6px; margin-bottom: 2px; }
+    .sidebar .nav-link:hover, .sidebar .nav-link.active { background: #e9ecef; color: #212529; }
+    .sidebar .nav-link i { width: 20px; }
+
+    /* ── Основной контент ────────────────────────────── */
+    .content { padding: 16px; }
+    @media (min-width: 768px) { .content { padding: 24px; } }
+
+    /* ── Карточки ────────────────────────────────────── */
+    .card { border: none; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+
+    /* ── Таблицы ─────────────────────────────────────── */
+    .table th {
+      background: #f1f3f5;
+      font-weight: 600;
+      font-size: .82rem;
+      text-transform: uppercase;
+      letter-spacing: .3px;
+      white-space: nowrap;
+    }
+
+    /* ── Бейджи / прогресс ───────────────────────────── */
+    .badge { font-size: .8rem; }
+    .progress { height: 8px; }
+
+    /* ── Мобильное меню в навбаре ────────────────────── */
+    .navbar-nav .nav-section-label {
+      font-size: .7rem;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.5);
+      padding: .4rem 1rem .1rem;
+      letter-spacing: .5px;
+    }
+    .mobile-nav-divider { border-color: rgba(255,255,255,.15); margin: .4rem .75rem; }
+
+    /* ── Аватар ─────────────────────────────────────── */
+    .avatar-circle {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: #6c757d;
+      color: #fff;
+      font-size: .7rem;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+    .avatar-img {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+    /* Аватар в боковой панели (чуть крупнее) */
+    .sidebar-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
+    .sidebar-avatar-circle {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: #6c757d; color: #fff;
+      font-size: .75rem; font-weight: 700;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+  </style>
+</head>
+<body>
+
+{# ── Ссылка логотипа по роли ──────────────────────────────────── #}
+{% if current_user.is_authenticated %}
+  {% if current_user.role == 'admin' %}{% set logo_href = url_for('admin_dashboard') %}
+  {% elif current_user.role == 'foreman' %}{% set logo_href = url_for('foreman_dashboard') %}
+  {% else %}{% set logo_href = '#' %}{% endif %}
+{% else %}{% set logo_href = url_for('login') %}{% endif %}
+
+{# ── Макрос: аватар пользователя ──────────────────────────────── #}
+{% macro user_avatar(size_class='avatar-img', circle_class='avatar-circle') %}
+  {% if current_user.avatar %}
+    <img src="{{ url_for('static', filename='avatars/' + current_user.avatar) }}"
+         class="{{ size_class }} me-2" alt="Аватар"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'">
+    <span class="{{ circle_class }} me-2" style="display:none">{{ current_user.initials }}</span>
+  {% else %}
+    <span class="{{ circle_class }} me-2">{{ current_user.initials }}</span>
+  {% endif %}
+{% endmacro %}
+
+{# ── Верхний навбар ───────────────────────────────────────────── #}
+<nav class="navbar navbar-expand-md navbar-dark bg-primary sticky-top">
+  <div class="container-fluid">
+
+    <a class="navbar-brand" href="{{ logo_href }}">
+      <i class="bi bi-hammer"></i> Штаб отделки
+    </a>
+
+    <button class="navbar-toggler border-0" type="button"
+            data-bs-toggle="collapse" data-bs-target="#navbarMain"
+            aria-controls="navbarMain" aria-expanded="false" aria-label="Меню">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="navbarMain">
+
+      {# ── Мобильное меню ────────────────────────────────────── #}
+      {% if current_user.is_authenticated %}
+      <ul class="navbar-nav me-auto d-md-none">
+
+        {% if current_user.role == 'admin' %}
+          <li class="nav-item">
+            <a class="nav-link {% if request.endpoint == 'admin_dashboard' %}active fw-semibold{% endif %}"
+               href="{{ url_for('admin_dashboard') }}">
+              <i class="bi bi-speedometer2 me-1"></i>Дашборд
+            </a>
+          </li>
+          <li><hr class="mobile-nav-divider"></li>
+          <li><span class="nav-section-label">Объекты</span></li>
+          <li class="nav-item">
+            <a class="nav-link {% if request.endpoint in ['admin_buildings','admin_building_add','admin_building_edit'] %}active fw-semibold{% endif %}"
+               href="{{ url_for('admin_buildings') }}">
+              <i class="bi bi-buildings me-1"></i>Жилые комплексы
+            </a>
+          </li>
+          <li><hr class="mobile-nav-divider"></li>
+          <li><span class="nav-section-label">Справочники</span></li>
+          <li class="nav-item">
+            <a class="nav-link {% if request.endpoint == 'admin_stages_template' %}active fw-semibold{% endif %}"
+               href="{{ url_for('admin_stages_template') }}">
+              <i class="bi bi-list-check me-1"></i>Этапы
+            </a>
+          </li>
+          <li><hr class="mobile-nav-divider"></li>
+          <li><span class="nav-section-label">Управление</span></li>
+          <li class="nav-item">
+            <a class="nav-link {% if request.endpoint == 'admin_users' %}active fw-semibold{% endif %}"
+               href="{{ url_for('admin_users') }}">
+              <i class="bi bi-people me-1"></i>Пользователи
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if request.endpoint == 'admin_guest_tokens' %}active fw-semibold{% endif %}"
+               href="{{ url_for('admin_guest_tokens') }}">
+              <i class="bi bi-key me-1"></i>Гостевые доступы
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if request.endpoint == 'admin_export' %}active fw-semibold{% endif %}"
+               href="{{ url_for('admin_export') }}">
+              <i class="bi bi-file-earmark-excel me-1"></i>Экспорт Excel
+            </a>
+          </li>
+        {% elif current_user.role == 'foreman' %}
+          <li class="nav-item">
+            <a class="nav-link {% if request.endpoint == 'foreman_dashboard' %}active fw-semibold{% endif %}"
+               href="{{ url_for('foreman_dashboard') }}">
+              <i class="bi bi-house-door me-1"></i>Мои квартиры
+            </a>
+          </li>
+        {% endif %}
+
+        {# Профиль — для всех ролей #}
+        <li><hr class="mobile-nav-divider"></li>
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint == 'profile' %}active fw-semibold{% endif %}"
+             href="{{ url_for('profile') }}">
+            <i class="bi bi-person-circle me-1"></i>Профиль
+          </a>
+        </li>
+        <li><hr class="mobile-nav-divider"></li>
+
+      </ul>
+      {% endif %}
+
+      {# ── Правая часть: аватар + имя + выход ───────────────── #}
+      <ul class="navbar-nav ms-auto align-items-center">
+        {% if current_user.is_authenticated %}
+        <li class="nav-item d-flex align-items-center me-2">
+          <a href="{{ url_for('profile') }}"
+             class="d-flex align-items-center text-decoration-none text-white"
+             style="opacity:.9" title="Профиль">
+            {{ user_avatar() }}
+            <span class="small d-none d-sm-inline">
+              {{ current_user.full_name or current_user.username }}
+              <span class="badge bg-light text-dark ms-1" style="font-size:.7rem">
+                {% if current_user.role == 'admin' %}Администратор
+                {% elif current_user.role == 'foreman' %}Бригадир
+                {% else %}Гость{% endif %}
+              </span>
+            </span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link px-2" href="{{ url_for('logout') }}" title="Выйти">
+            <i class="bi bi-box-arrow-right"></i>
+            <span class="d-md-none">Выйти</span>
+          </a>
+        </li>
+        {% endif %}
+      </ul>
+
+    </div>
+  </div>
+</nav>
+
+{# ── Основная компоновка ─────────────────────────────────────── #}
+<div class="container-fluid px-0">
+  <div class="row g-0">
+    {% block sidebar %}{% endblock %}
+    <main class="col content">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}
+          <div class="alert alert-{{ cat }} alert-dismissible fade show mb-3" role="alert">
+            {{ msg }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
+        {% endfor %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

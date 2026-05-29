@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block title %}Новый пользователь{% endblock %}
+{% block sidebar %}{% include 'admin/_sidebar.html' %}{% endblock %}
+
+{% block content %}
+<div class="mb-2">
+  <a href="{{ url_for('admin_users') }}" class="text-decoration-none text-muted small">
+    <i class="bi bi-arrow-left"></i> Назад к списку
+  </a>
+</div>
+<h4 class="fw-bold mb-4">Новый пользователь</h4>
+
+<div class="card p-4" style="max-width:440px">
+  <form method="post">
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Логин <span class="text-danger">*</span></label>
+      <input type="text" name="username" class="form-control" required>
+    </div>
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Полное имя</label>
+      <input type="text" name="full_name" class="form-control" placeholder="Иванов Иван Иванович">
+    </div>
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Роль <span class="text-danger">*</span></label>
+      <select name="role" class="form-select" required>
+        <option value="foreman">Бригадир</option>
+        <option value="admin">Администратор</option>
+      </select>
+    </div>
+    <div class="mb-4">
+      <label class="form-label fw-semibold">Пароль <span class="text-danger">*</span></label>
+      <input type="password" name="password" class="form-control" required>
+    </div>
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check-lg me-1"></i>Создать
+    </button>
+    <a href="{{ url_for('admin_users') }}" class="btn btn-outline-secondary ms-2">Отмена</a>
+  </form>
+</div>
+{% endblock %}

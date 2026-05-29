@@ -1,0 +1,168 @@
+{% extends 'base.html' %}
+{% block title %}Профиль — Штаб отделки{% endblock %}
+
+{# Подключаем нужную боковую панель по роли #}
+{% block sidebar %}
+  {% if current_user.role == 'admin' %}
+    {% include 'admin/_sidebar.html' %}
+  {% elif current_user.role == 'foreman' %}
+    {# Инлайн-панель бригадира #}
+    <div class="col-auto col-md-2 sidebar py-3 px-2 d-none d-md-flex flex-column">
+      <ul class="nav flex-column flex-grow-1">
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('foreman_dashboard') }}">
+            <i class="bi bi-house-door"></i> Мои квартиры
+          </a>
+        </li>
+      </ul>
+      <div class="border-top pt-2 mt-2">
+        <a class="nav-link active d-flex align-items-center gap-2" href="{{ url_for('profile') }}">
+          {% if current_user.avatar %}
+            <img src="{{ url_for('static', filename='avatars/' + current_user.avatar) }}"
+                 class="sidebar-avatar" alt="Аватар">
+          {% else %}
+            <span class="sidebar-avatar-circle">{{ current_user.initials }}</span>
+          {% endif %}
+          <span class="small">Профиль</span>
+        </a>
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<h4 class="fw-bold mb-4"><i class="bi bi-person-circle me-2"></i>Профиль</h4>
+
+<div class="row g-4">
+
+  {# ════════════════════════════════════════════════
+     Блок 1: Аватар
+  ════════════════════════════════════════════════ #}
+  <div class="col-12 col-md-4">
+    <div class="card p-4 text-center">
+      <h6 class="fw-semibold text-muted text-uppercase mb-3" style="font-size:.75rem">Аватар</h6>
+
+      {# Текущий аватар или инициалы #}
+      <div class="mb-3 d-flex justify-content-center">
+        {% if current_user.avatar %}
+          <img src="{{ url_for('static', filename='avatars/' + current_user.avatar) }}"
+               class="rounded-circle" style="width:96px;height:96px;object-fit:cover"
+               alt="Аватар" id="avatarPreview"
+               onerror="this.style.display='none';document.getElementById('avatarInitials').style.display='flex'">
+          <span id="avatarInitials"
+                class="rounded-circle bg-secondary text-white d-none align-items-center justify-content-center"
+                style="width:96px;height:96px;font-size:2rem;font-weight:700">
+            {{ current_user.initials }}
+          </span>
+        {% else %}
+          <span id="avatarInitials"
+                class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center"
+                style="width:96px;height:96px;font-size:2rem;font-weight:700">
+            {{ current_user.initials }}
+          </span>
+          <img id="avatarPreview" src="" alt="" class="rounded-circle d-none"
+               style="width:96px;height:96px;object-fit:cover">
+        {% endif %}
+      </div>
+
+      <form method="post" action="{{ url_for('profile_avatar') }}" enctype="multipart/form-data">
+        <div class="mb-3">
+          <label class="btn btn-outline-secondary btn-sm w-100" for="avatarFile">
+            <i class="bi bi-upload me-1"></i>Выбрать фото
+          </label>
+          <input type="file" id="avatarFile" name="avatar"
+                 accept=".jpg,.jpeg,.png" class="d-none">
+          <div class="form-text mt-1">JPG или PNG, не более 2 МБ</div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm w-100">
+          <i class="bi bi-check-lg me-1"></i>Сохранить аватар
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-12 col-md-8">
+    <div class="row g-4">
+
+      {# ════════════════════════════════════════════════
+         Блок 2: Смена логина (не для гостей)
+      ════════════════════════════════════════════════ #}
+      {% if current_user.role != 'guest' %}
+      <div class="col-12">
+        <div class="card p-4">
+          <h6 class="fw-semibold text-muted text-uppercase mb-3" style="font-size:.75rem">Смена логина</h6>
+          <form method="post" action="{{ url_for('profile_login') }}">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Текущий логин</label>
+              <input type="text" class="form-control form-control-sm bg-light"
+                     value="{{ current_user.username }}" disabled>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Новый логин</label>
+              <input type="text" name="new_username" class="form-control"
+                     minlength="3" required autocomplete="username"
+                     placeholder="Минимум 3 символа">
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">
+              <i class="bi bi-check-lg me-1"></i>Сохранить логин
+            </button>
+          </form>
+        </div>
+      </div>
+      {% endif %}
+
+      {# ════════════════════════════════════════════════
+         Блок 3: Смена пароля
+      ════════════════════════════════════════════════ #}
+      <div class="col-12">
+        <div class="card p-4">
+          <h6 class="fw-semibold text-muted text-uppercase mb-3" style="font-size:.75rem">Смена пароля</h6>
+          <form method="post" action="{{ url_for('profile_password') }}">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Текущий пароль</label>
+              <input type="password" name="current_password" class="form-control"
+                     required autocomplete="current-password" placeholder="••••••••">
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Новый пароль</label>
+              <input type="password" name="new_password" class="form-control"
+                     minlength="4" required autocomplete="new-password"
+                     placeholder="Минимум 4 символа">
+            </div>
+            <div class="mb-4">
+              <label class="form-label fw-semibold">Повторите новый пароль</label>
+              <input type="password" name="confirm_password" class="form-control"
+                     required autocomplete="new-password" placeholder="••••••••">
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">
+              <i class="bi bi-shield-lock me-1"></i>Сменить пароль
+            </button>
+          </form>
+        </div>
+      </div>
+
+    </div>{# /row внутренний #}
+  </div>
+
+</div>{# /row внешний #}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Предпросмотр аватара перед загрузкой
+  document.getElementById('avatarFile').addEventListener('change', function() {
+    const file = this.files[0]
+    if (!file) return
+    const preview = document.getElementById('avatarPreview')
+    const initials = document.getElementById('avatarInitials')
+    const reader = new FileReader()
+    reader.onload = e => {
+      preview.src = e.target.result
+      preview.classList.remove('d-none')
+      preview.style.display = ''
+      if (initials) initials.style.display = 'none'
+    }
+    reader.readAsDataURL(file)
+  })
+</script>
+{% endblock %}

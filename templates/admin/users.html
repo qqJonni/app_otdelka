@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block title %}Пользователи{% endblock %}
+{% block sidebar %}{% include 'admin/_sidebar.html' %}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="fw-bold mb-0"><i class="bi bi-people me-2"></i>Пользователи</h4>
+  <a href="{{ url_for('admin_user_add') }}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>Добавить
+  </a>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0 align-middle">
+      <thead>
+        <tr>
+          <th>Логин</th>
+          <th class="d-none d-sm-table-cell">Имя</th>
+          <th>Роль</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td>
+            <div class="font-monospace fw-semibold">{{ u.username }}</div>
+            {# Имя под логином на xs #}
+            {% if u.full_name %}
+            <div class="text-muted small d-sm-none">{{ u.full_name }}</div>
+            {% endif %}
+          </td>
+          <td class="d-none d-sm-table-cell">{{ u.full_name or '—' }}</td>
+          <td>
+            {% if u.role == 'admin' %}
+              <span class="badge bg-danger">Администратор</span>
+            {% elif u.role == 'foreman' %}
+              <span class="badge bg-primary">Бригадир</span>
+            {% else %}
+              <span class="badge bg-secondary">Гость</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            {% if u.id != current_user.id %}
+            <form method="post" action="{{ url_for('admin_user_delete', uid=u.id) }}"
+                  class="d-inline" onsubmit="return confirm('Удалить пользователя {{ u.username }}?')">
+              <button class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i></button>
+            </form>
+            {% else %}
+            <span class="text-muted small">(вы)</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ building.name }} — Штаб отделки</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body { background: #f8f9fa; }
+    .card { border: none; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+    .table th {
+      background: #f1f3f5;
+      font-weight: 600;
+      font-size: .82rem;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .progress { height: 10px; }
+
+    /* Цветовая индикация строк */
+    .stage-row-not_started td { background: #f8f9fa; }
+    .stage-row-in_progress td { background: #fff9e6; }
+    .stage-row-done       td { background: #f0faf4; }
+    .stage-row-overdue    td { background: #fff2f2; }
+
+    /* Логотип-ссылка */
+    .navbar-brand { font-weight: 700; }
+    .navbar-brand:hover { opacity: .85; }
+  </style>
+</head>
+<body>
+
+{# ── Навбар ─────────────────────────────────────────────────── #}
+<nav class="navbar navbar-dark bg-primary sticky-top mb-0">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="/guest/{{ token }}">
+      <i class="bi bi-hammer me-2"></i>Штаб отделки
+    </a>
+    <span class="navbar-text small">
+      <i class="bi bi-buildings me-1"></i><strong>{{ building.name }}</strong>
+    </span>
+  </div>
+</nav>
+
+<div class="container-fluid px-2 px-md-4 py-3">
+
+  {# ── Квартиры ──────────────────────────────────────────────── #}
+  {% for item in apt_data %}
+  {% set apt = item.apt %}
+  <div class="card mb-4">
+
+    {# Заголовок с прогресс-баром #}
+    <div class="card-header py-2">
+      <div class="d-flex justify-content-between align-items-center">
+        <strong>Квартира №{{ apt.number }}</strong>
+        <div class="d-flex align-items-center gap-2" style="min-width:120px; max-width:200px">
+          <div class="progress flex-grow-1">
+            <div class="progress-bar bg-success" style="width:{{ item.pct }}%"></div>
+          </div>
+          <small class="text-muted text-nowrap">{{ item.pct }}%</small>
+        </div>
+      </div>
+      {% if apt.plan_end_date %}
+      <div class="text-muted small mt-1">
+        <i class="bi bi-calendar-check me-1"></i>Плановая сдача: {{ apt.plan_end_date }}
+      </div>
+      {% endif %}
+    </div>
+
+    {# Таблица этапов #}
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table mb-0 align-middle">
+          <thead>
+            <tr>
+              <th class="d-none d-sm-table-cell" style="width:32px">#</th>
+              <th>Этап</th>
+              <th>Дедлайн</th>
+              <th>Статус</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in item.stages %}
+            <tr class="stage-row-{{ s.status }}">
+              <td class="text-muted small d-none d-sm-table-cell">{{ s.order_num }}</td>
+              <td>{{ s.stage_name }}</td>
+              <td class="small text-nowrap {% if s.status == 'overdue' %}text-danger fw-semibold{% else %}text-muted{% endif %}">
+                {{ s.deadline if s.deadline else '—' }}
+              </td>
+              <td class="text-nowrap">
+                {% if s.status == 'not_started' %}
+                  <span class="badge bg-secondary">Не начат</span>
+                {% elif s.status == 'in_progress' %}
+                  <span class="badge bg-warning text-dark">В работе</span>
+                {% elif s.status == 'done' %}
+                  <span class="badge bg-success">Завершён</span>
+                {% else %}
+                  <span class="badge bg-danger">Просрочен</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+
+  <div class="text-center text-muted small pb-4">
+    <i class="bi bi-clock me-1"></i>Актуально на {{ now().strftime('%d.%m.%Y %H:%M') }}
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

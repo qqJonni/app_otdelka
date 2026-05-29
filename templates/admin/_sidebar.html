@@ -1,0 +1,65 @@
+<div class="col-auto col-md-2 sidebar py-3 px-2 d-none d-md-flex flex-column">
+  <ul class="nav flex-column flex-grow-1">
+    <li class="nav-item">
+      <a class="nav-link {% if request.endpoint == 'admin_dashboard' %}active{% endif %}"
+         href="{{ url_for('admin_dashboard') }}">
+        <i class="bi bi-speedometer2"></i> Дашборд
+      </a>
+    </li>
+    <li class="nav-item mt-2">
+      <small class="text-muted px-3 text-uppercase" style="font-size:.7rem">Объекты</small>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if request.endpoint in ['admin_buildings','admin_building_add','admin_building_edit'] %}active{% endif %}"
+         href="{{ url_for('admin_buildings') }}">
+        <i class="bi bi-buildings"></i> Жилые комплексы
+      </a>
+    </li>
+    <li class="nav-item mt-2">
+      <small class="text-muted px-3 text-uppercase" style="font-size:.7rem">Справочники</small>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if request.endpoint == 'admin_stages_template' %}active{% endif %}"
+         href="{{ url_for('admin_stages_template') }}">
+        <i class="bi bi-list-check"></i> Этапы
+      </a>
+    </li>
+    <li class="nav-item mt-2">
+      <small class="text-muted px-3 text-uppercase" style="font-size:.7rem">Управление</small>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if request.endpoint == 'admin_users' %}active{% endif %}"
+         href="{{ url_for('admin_users') }}">
+        <i class="bi bi-people"></i> Пользователи
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if request.endpoint == 'admin_guest_tokens' %}active{% endif %}"
+         href="{{ url_for('admin_guest_tokens') }}">
+        <i class="bi bi-key"></i> Гостевые доступы
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if request.endpoint == 'admin_export' %}active{% endif %}"
+         href="{{ url_for('admin_export') }}">
+        <i class="bi bi-file-earmark-excel"></i> Экспорт Excel
+      </a>
+    </li>
+  </ul>
+
+  {# ── Профиль в нижней части боковой панели ── #}
+  <div class="border-top pt-2 mt-2">
+    <a class="nav-link d-flex align-items-center gap-2 {% if request.endpoint == 'profile' %}active{% endif %}"
+       href="{{ url_for('profile') }}">
+      {% if current_user.avatar %}
+        <img src="{{ url_for('static', filename='avatars/' + current_user.avatar) }}"
+             class="sidebar-avatar" alt="Аватар"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'">
+        <span class="sidebar-avatar-circle" style="display:none">{{ current_user.initials }}</span>
+      {% else %}
+        <span class="sidebar-avatar-circle">{{ current_user.initials }}</span>
+      {% endif %}
+      <span class="small">Профиль</span>
+    </a>
+  </div>
+</div>
