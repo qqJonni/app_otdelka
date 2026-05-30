@@ -1,32 +1,39 @@
 {% extends 'base.html' %}
 {% block title %}Профиль — Штаб отделки{% endblock %}
+{% block page_heading %}Профиль{% endblock %}
 
 {# Подключаем нужную боковую панель по роли #}
 {% block sidebar %}
   {% if current_user.role == 'admin' %}
     {% include 'admin/_sidebar.html' %}
   {% elif current_user.role == 'foreman' %}
-    {# Инлайн-панель бригадира #}
-    <div class="col-auto col-md-2 sidebar py-3 px-2 d-none d-md-flex flex-column">
-      <ul class="nav flex-column flex-grow-1">
-        <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('foreman_dashboard') }}">
-            <i class="bi bi-house-door"></i> Мои квартиры
-          </a>
-        </li>
-      </ul>
-      <div class="border-top pt-2 mt-2">
-        <a class="nav-link active d-flex align-items-center gap-2" href="{{ url_for('profile') }}">
-          {% if current_user.avatar %}
-            <img src="{{ url_for('static', filename='avatars/' + current_user.avatar) }}"
-                 class="sidebar-avatar" alt="Аватар">
-          {% else %}
-            <span class="sidebar-avatar-circle">{{ current_user.initials }}</span>
-          {% endif %}
-          <span class="small">Профиль</span>
+    <aside class="crm-sidebar d-none d-md-flex flex-column">
+      <div class="crm-sidebar-logo">
+        <a href="{{ url_for('foreman_dashboard') }}">
+          <div class="logo-icon"><i class="bi bi-building text-white"></i></div>
+          <span>Штаб отделки</span>
         </a>
       </div>
-    </div>
+      <nav class="crm-sidebar-nav">
+        <a class="crm-sidebar-link" href="{{ url_for('foreman_dashboard') }}">
+          <i class="bi bi-house-door"></i><span>Мои квартиры</span>
+        </a>
+      </nav>
+      <div class="crm-sidebar-footer">
+        <a class="crm-sidebar-link active" href="{{ url_for('profile') }}">
+          {% if current_user.avatar %}
+            <img src="{{ url_for('static', filename='avatars/' + current_user.avatar) }}"
+                 class="crm-sidebar-avatar" alt="Аватар">
+          {% else %}
+            <span class="crm-sidebar-avatar-circle">{{ current_user.initials }}</span>
+          {% endif %}
+          <span>{{ current_user.full_name or current_user.username }}</span>
+        </a>
+        <a class="crm-sidebar-link" href="{{ url_for('logout') }}">
+          <i class="bi bi-box-arrow-right"></i><span>Выйти</span>
+        </a>
+      </div>
+    </aside>
   {% endif %}
 {% endblock %}
 

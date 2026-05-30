@@ -1,0 +1,679 @@
+/* ══════════════════════════════════════════════════════
+   CRM Design System — Штаб отделки
+   ══════════════════════════════════════════════════════ */
+
+:root {
+  --bg:           #F5F6FA;
+  --surface:      #FFFFFF;
+  --sidebar-bg:   #1E293B;
+  --sidebar-text: #CBD5E1;
+  --sidebar-active-bg: #3B82F6;
+  --primary:      #3B82F6;
+  --success:      #10B981;
+  --danger:       #EF4444;
+  --warning:      #F59E0B;
+  --text-main:    #1E293B;
+  --text-secondary: #64748B;
+  --text-muted:   #94A3B8;
+  --border:       #E2E8F0;
+  --table-head-bg: #F8FAFC;
+  --row-hover:    #F8FAFC;
+  --radius-card:  12px;
+  --radius-btn:   8px;
+  --radius-input: 8px;
+  --shadow-card:  0 1px 3px rgba(0,0,0,0.08);
+  --shadow-hover: 0 4px 12px rgba(0,0,0,0.10);
+  --topbar-h:     60px;
+  --sidebar-w:    240px;
+  --mobile-nav-h: 56px;
+}
+
+/* ── Базовые стили ───────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  color: var(--text-main);
+  background: var(--bg);
+  margin: 0;
+}
+
+a { color: var(--primary); }
+a:hover { color: #2563EB; }
+
+/* ══ МОБИЛЬНЫЙ НАВБАР (< 768px) ══════════════════════ */
+.crm-mobile-nav {
+  position: sticky;
+  top: 0;
+  z-index: 1030;
+  background: var(--sidebar-bg);
+  height: var(--mobile-nav-h);
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+
+.crm-mobile-nav .navbar-toggler {
+  border: none;
+  padding: 4px 6px;
+  color: #fff;
+  font-size: 1.2rem;
+  background: none;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.crm-mobile-nav .navbar-toggler:focus { box-shadow: none; outline: none; }
+
+.crm-mobile-brand {
+  flex: 1;
+  text-align: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 15px;
+  text-decoration: none;
+  letter-spacing: 0.3px;
+}
+.crm-mobile-brand:hover { color: #fff; opacity: 0.9; text-decoration: none; }
+
+.crm-mobile-nav .crm-nav-avatar { flex-shrink: 0; }
+
+/* Выпадающее мобильное меню */
+.crm-mobile-menu {
+  position: fixed;
+  top: var(--mobile-nav-h);
+  left: 0;
+  width: 100%;
+  max-height: calc(100vh - var(--mobile-nav-h));
+  overflow-y: auto;
+  background: var(--sidebar-bg);
+  z-index: 1025;
+  padding: 12px 8px 24px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.crm-mobile-menu .crm-section-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.4);
+  letter-spacing: 0.6px;
+  padding: 12px 12px 4px;
+  display: block;
+}
+
+.crm-mobile-menu .crm-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  color: var(--sidebar-text);
+  text-decoration: none;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 2px;
+  transition: background 0.15s;
+}
+.crm-mobile-menu .crm-nav-link:hover { background: rgba(255,255,255,0.08); color: #fff; }
+.crm-mobile-menu .crm-nav-link.active { background: var(--primary); color: #fff; }
+
+.crm-mobile-menu .crm-nav-divider {
+  border: none;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  margin: 8px 12px;
+}
+
+/* ══ ДЕСКТОПНЫЙ ЛЕЙАУТ (≥ 768px) ════════════════════ */
+.crm-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ── Боковая панель ──────────────────────────────────── */
+.crm-sidebar {
+  width: var(--sidebar-w);
+  min-width: var(--sidebar-w);
+  background: var(--sidebar-bg);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+@media (max-width: 767.98px) {
+  .crm-sidebar { display: none !important; }
+}
+
+.crm-sidebar-logo {
+  padding: 20px 16px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.crm-sidebar-logo a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 15px;
+  text-decoration: none;
+  letter-spacing: 0.3px;
+}
+.crm-sidebar-logo a:hover { opacity: 0.9; color: #fff; }
+.crm-sidebar-logo .logo-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.crm-sidebar-nav {
+  flex: 1;
+  padding: 12px 8px;
+  overflow-y: auto;
+}
+
+.crm-sidebar-section {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.35);
+  letter-spacing: 0.6px;
+  padding: 12px 10px 4px;
+}
+
+.crm-sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px;
+  color: var(--sidebar-text);
+  text-decoration: none;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 2px;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.crm-sidebar-link i { font-size: 16px; flex-shrink: 0; width: 18px; text-align: center; }
+.crm-sidebar-link:hover { background: rgba(255,255,255,0.08); color: #fff; }
+.crm-sidebar-link.active { background: var(--primary); color: #fff; }
+.crm-sidebar-link .badge { margin-left: auto; }
+
+.crm-sidebar-footer {
+  padding: 12px 8px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.crm-sidebar-footer .crm-sidebar-link { margin-bottom: 0; }
+.crm-sidebar-footer .crm-sidebar-link:last-child { color: #94A3B8; }
+.crm-sidebar-footer .crm-sidebar-link:last-child:hover { background: rgba(239,68,68,0.15); color: #FCA5A5; }
+
+/* Аватар в боковой панели */
+.crm-sidebar-avatar {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.crm-sidebar-avatar-circle {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  background: #3B82F6;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* ── Основная область ────────────────────────────────── */
+.crm-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Верхний навбар (десктоп) ────────────────────────── */
+.crm-topbar {
+  height: var(--topbar-h);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  flex-shrink: 0;
+}
+
+@media (max-width: 767.98px) {
+  .crm-topbar { display: none !important; }
+}
+
+.crm-topbar-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-main);
+  flex: 1;
+}
+
+.crm-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.crm-topbar-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 18px;
+  transition: background 0.15s;
+}
+.crm-topbar-icon:hover { background: var(--bg); color: var(--text-main); }
+.crm-topbar-icon .badge-dot {
+  position: absolute;
+  top: 4px; right: 4px;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
+  border: 2px solid #fff;
+}
+
+.crm-topbar-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+.crm-topbar-user:hover { background: var(--bg); }
+.crm-topbar-user-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-main);
+  line-height: 1.2;
+}
+.crm-topbar-user-role {
+  font-size: 11px;
+  color: var(--text-secondary);
+  display: block;
+}
+
+/* ── Контент ─────────────────────────────────────────── */
+.crm-content {
+  flex: 1;
+  padding: 24px;
+}
+@media (max-width: 767.98px) {
+  .crm-content { padding: 14px 12px; }
+}
+
+/* ══ АВАТАРЫ ═════════════════════════════════════════ */
+.crm-avatar {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.crm-avatar-circle {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+/* ══ КАРТОЧКИ ════════════════════════════════════════ */
+.card {
+  background: var(--surface);
+  border: none !important;
+  border-radius: var(--radius-card) !important;
+  box-shadow: var(--shadow-card) !important;
+}
+.card-hover { transition: box-shadow 0.2s, transform 0.2s; }
+.card-hover:hover { box-shadow: var(--shadow-hover) !important; transform: translateY(-1px); }
+
+/* ── Карточки статистики ─────────────────────────────── */
+.stat-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+.stat-card-icon {
+  width: 48px; height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+.stat-card-value {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text-main);
+}
+.stat-card-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 3px;
+}
+
+/* ── Карточки квартир (бригадир) ─────────────────────── */
+.apt-card {
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+.apt-card:hover { box-shadow: var(--shadow-hover); }
+.apt-card--done { border: 2px solid #10B981 !important; }
+
+.apt-card__header {
+  padding: 16px 20px;
+  cursor: pointer;
+  border: none;
+  background: var(--surface);
+  width: 100%;
+  text-align: left;
+  transition: background 0.12s;
+}
+.apt-card__header:hover { background: #FAFBFC !important; }
+.apt-card__header:focus { outline: none; box-shadow: 0 0 0 3px rgba(59,130,246,0.2); }
+.apt-card__header[aria-expanded="true"] .apt-card__arrow i { transform: rotate(180deg); }
+.apt-card__arrow i { transition: transform 0.25s ease; display: inline-block; }
+.apt-card__body { border-top: 1px solid var(--border); background: var(--surface); }
+
+.action-btn { min-height: 36px; min-width: 36px; padding: 6px 12px; }
+
+/* ══ ТАБЛИЦЫ ════════════════════════════════════════ */
+.table {
+  --bs-table-hover-bg: var(--row-hover);
+  font-size: 14px;
+}
+.table thead th {
+  background: var(--table-head-bg) !important;
+  color: var(--text-secondary) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.4px !important;
+  border-bottom: 1px solid var(--border) !important;
+  white-space: nowrap;
+  padding: 10px 12px !important;
+}
+.table tbody tr { border-bottom: 1px solid var(--border) !important; }
+.table tbody tr:last-child { border-bottom: none !important; }
+.table tbody td { padding: 10px 12px !important; vertical-align: middle; }
+.table-success { --bs-table-bg: #F0FDF4 !important; }
+
+/* ══ КНОПКИ ════════════════════════════════════════ */
+.btn {
+  border-radius: var(--radius-btn) !important;
+  font-weight: 500;
+  font-size: 14px;
+  padding: 8px 16px;
+  transition: all 0.15s;
+}
+.btn-sm { padding: 5px 10px !important; font-size: 13px !important; }
+.btn-primary {
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+  color: #fff !important;
+}
+.btn-primary:hover { background: #2563EB !important; border-color: #2563EB !important; }
+.btn-success {
+  background: var(--success) !important;
+  border-color: var(--success) !important;
+  color: #fff !important;
+}
+.btn-success:hover { background: #059669 !important; border-color: #059669 !important; }
+.btn-danger {
+  background: var(--danger) !important;
+  border-color: var(--danger) !important;
+  color: #fff !important;
+}
+.btn-danger:hover { background: #DC2626 !important; border-color: #DC2626 !important; }
+.btn-warning {
+  background: var(--warning) !important;
+  border-color: var(--warning) !important;
+  color: #fff !important;
+}
+.btn-warning:hover { background: #D97706 !important; border-color: #D97706 !important; color: #fff !important; }
+
+.btn-outline-secondary {
+  color: var(--text-secondary) !important;
+  border-color: var(--border) !important;
+}
+.btn-outline-secondary:hover {
+  background: var(--bg) !important;
+  color: var(--text-main) !important;
+  border-color: #CBD5E1 !important;
+}
+.btn-outline-primary {
+  color: var(--primary) !important;
+  border-color: var(--primary) !important;
+}
+.btn-outline-primary:hover { background: #EFF6FF !important; }
+.btn-outline-danger {
+  color: var(--danger) !important;
+  border-color: var(--danger) !important;
+}
+.btn-outline-danger:hover { background: #FEF2F2 !important; color: var(--danger) !important; }
+
+/* ══ ПОЛЯ ВВОДА ═════════════════════════════════════ */
+.form-control, .form-select {
+  border-radius: var(--radius-input) !important;
+  border: 1px solid var(--border) !important;
+  background: #F8FAFC !important;
+  font-size: 14px !important;
+  height: 44px !important;
+  color: var(--text-main) !important;
+  padding: 10px 14px !important;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.form-control:focus, .form-select:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.12) !important;
+  background: #fff !important;
+  outline: none;
+}
+.form-control.is-invalid { border-color: var(--danger) !important; }
+textarea.form-control { height: auto !important; min-height: 100px; }
+.input-group-text {
+  border-radius: var(--radius-input) !important;
+  border-color: var(--border) !important;
+  background: #F8FAFC !important;
+  color: var(--text-secondary);
+}
+.input-group .form-control { border-radius: 0 var(--radius-input) var(--radius-input) 0 !important; }
+.input-group .input-group-text { border-radius: var(--radius-input) 0 0 var(--radius-input) !important; }
+
+.form-label {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--text-secondary) !important;
+  margin-bottom: 6px !important;
+}
+
+/* ══ БЕЙДЖИ СТАТУСОВ ════════════════════════════════ */
+.badge {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  border-radius: 6px !important;
+  padding: 3px 8px !important;
+}
+
+.badge-done    { background: #D1FAE5 !important; color: #065F46 !important; }
+.badge-progress { background: #DBEAFE !important; color: #1E40AF !important; }
+.badge-pending  { background: #F1F5F9 !important; color: #475569 !important; }
+.badge-overdue  { background: #FEE2E2 !important; color: #991B1B !important; }
+.badge-rework   { background: #FEF3C7 !important; color: #92400E !important; }
+
+/* Переопределение Bootstrap bg- классов для бейджей */
+.badge.bg-success  { background: #D1FAE5 !important; color: #065F46 !important; }
+.badge.bg-primary  { background: #DBEAFE !important; color: #1E40AF !important; }
+.badge.bg-secondary { background: #F1F5F9 !important; color: #475569 !important; }
+.badge.bg-danger   { background: #FEE2E2 !important; color: #991B1B !important; }
+.badge.bg-warning  { background: #FEF3C7 !important; color: #92400E !important; }
+.badge.text-dark   { color: #92400E !important; }
+.badge.bg-light    { background: #F1F5F9 !important; color: #475569 !important; }
+
+/* ══ ПРОГРЕСС-БАР ═══════════════════════════════════ */
+.progress {
+  height: 6px !important;
+  border-radius: 3px !important;
+  background: #E2E8F0 !important;
+}
+.progress-bar {
+  background: var(--success) !important;
+  border-radius: 3px !important;
+}
+
+/* ══ МОДАЛЬНЫЕ ОКНА ═════════════════════════════════ */
+.modal-content {
+  border: none !important;
+  border-radius: 16px !important;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15) !important;
+}
+.modal-header {
+  border-bottom: 1px solid var(--border) !important;
+  padding: 20px 24px 16px !important;
+}
+.modal-footer {
+  border-top: 1px solid var(--border) !important;
+  padding: 16px 24px !important;
+}
+.modal-body { padding: 20px 24px !important; }
+.modal-title { font-weight: 600 !important; font-size: 16px !important; }
+
+/* ══ АЛЕРТЫ ════════════════════════════════════════ */
+.alert {
+  border-radius: var(--radius-card) !important;
+  border: none !important;
+  font-size: 14px;
+}
+.alert-success { background: #D1FAE5 !important; color: #065F46 !important; }
+.alert-danger  { background: #FEE2E2 !important; color: #991B1B !important; }
+.alert-warning { background: #FEF3C7 !important; color: #92400E !important; }
+.alert-info    { background: #DBEAFE !important; color: #1E40AF !important; }
+
+/* ══ LIST GROUP (дашборд — список ЖК) ══════════════ */
+.list-group-item {
+  border-color: var(--border) !important;
+  font-size: 14px;
+}
+.list-group-item-action:hover { background: var(--bg) !important; }
+
+/* ══ ЗАГОЛОВКИ СТРАНИЦ ══════════════════════════════ */
+h4.fw-bold { font-size: 20px; color: var(--text-main); }
+h5, h6 { color: var(--text-main); }
+.text-muted { color: var(--text-secondary) !important; }
+
+/* ══ УТИЛИТЫ ════════════════════════════════════════ */
+.text-primary { color: var(--primary) !important; }
+.text-success { color: var(--success) !important; }
+.text-danger  { color: var(--danger)  !important; }
+.text-warning { color: var(--warning) !important; }
+
+/* bg-opacity-10 для модалок */
+.bg-warning.bg-opacity-10 { background: rgba(245,158,11,0.08) !important; }
+
+/* Фото превью */
+.photo-thumb-wrap {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #F1F5F9;
+}
+.photo-thumb-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-thumb-wrap .remove-photo {
+  position: absolute; top: 4px; right: 4px;
+  background: rgba(0,0,0,0.55); color: #fff;
+  border: none; border-radius: 50%;
+  width: 22px; height: 22px;
+  font-size: 12px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; padding: 0;
+}
+.gallery-img {
+  width: 100%; aspect-ratio: 1;
+  object-fit: cover; border-radius: 8px;
+  cursor: zoom-in; transition: opacity 0.15s;
+}
+.gallery-img:hover { opacity: 0.85; }
+
+/* ══ СТРАНИЦЫ ЛОГИНА / РЕГИСТРАЦИИ ══════════════════ */
+.auth-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1E293B 0%, #334155 100%);
+  display: flex;
+  align-items: center;
+  padding: 24px 0;
+}
+.auth-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 40px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+}
+.auth-logo-icon {
+  width: 56px; height: 56px;
+  border-radius: 14px;
+  background: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  color: #fff;
+  margin: 0 auto 12px;
+}
+@media (max-width: 575.98px) {
+  .auth-card { padding: 28px 20px; }
+}
+
+/* ══ МОБИЛЬНАЯ АДАПТАЦИЯ ════════════════════════════ */
+@media (max-width: 767.98px) {
+  .crm-content { padding: 12px; }
+  .stat-card { padding: 14px; gap: 12px; }
+  .stat-card-icon { width: 40px; height: 40px; font-size: 18px; }
+  .stat-card-value { font-size: 24px; }
+  .apt-card__header { padding: 14px 16px; }
+  .action-btn { padding: 8px 10px; }
+  h4.fw-bold { font-size: 18px; }
+  .auth-card { border-radius: 12px; }
+}

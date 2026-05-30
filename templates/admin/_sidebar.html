@@ -1,74 +1,71 @@
-<div class="col-auto col-md-2 sidebar py-3 px-2 d-none d-md-flex flex-column">
-  <ul class="nav flex-column flex-grow-1">
-    <li class="nav-item">
-      <a class="nav-link {% if request.endpoint == 'admin_dashboard' %}active{% endif %}"
-         href="{{ url_for('admin_dashboard') }}">
-        <i class="bi bi-speedometer2"></i> Дашборд
-      </a>
-    </li>
-    <li class="nav-item mt-2">
-      <small class="text-muted px-3 text-uppercase" style="font-size:.7rem">Объекты</small>
-    </li>
-    <li class="nav-item">
-      <a class="nav-link {% if request.endpoint in ['admin_buildings','admin_building_add','admin_building_edit'] %}active{% endif %}"
-         href="{{ url_for('admin_buildings') }}">
-        <i class="bi bi-buildings"></i> Жилые комплексы
-      </a>
-    </li>
-    <li class="nav-item mt-2">
-      <small class="text-muted px-3 text-uppercase" style="font-size:.7rem">Справочники</small>
-    </li>
-    <li class="nav-item">
-      <a class="nav-link {% if request.endpoint == 'admin_stages_template' %}active{% endif %}"
-         href="{{ url_for('admin_stages_template') }}">
-        <i class="bi bi-list-check"></i> Этапы
-      </a>
-    </li>
-    <li class="nav-item mt-2">
-      <small class="text-muted px-3 text-uppercase" style="font-size:.7rem">Управление</small>
-    </li>
-    <li class="nav-item">
-      <a class="nav-link {% if request.endpoint == 'admin_users' %}active{% endif %}"
-         href="{{ url_for('admin_users') }}">
-        <i class="bi bi-people"></i> Пользователи
-      </a>
-    </li>
-    <li class="nav-item">
-      <a class="nav-link {% if request.endpoint == 'admin_guest_tokens' %}active{% endif %}"
-         href="{{ url_for('admin_guest_tokens') }}">
-        <i class="bi bi-key"></i> Гостевые доступы
-      </a>
-    </li>
-    <li class="nav-item">
-      <a class="nav-link {% if request.endpoint == 'admin_export' %}active{% endif %}"
-         href="{{ url_for('admin_export') }}">
-        <i class="bi bi-file-earmark-excel"></i> Экспорт Excel
-      </a>
-    </li>
-    <li class="nav-item">
-      <a class="nav-link {% if request.endpoint in ['admin_pending','admin_pending_approve','admin_pending_reject'] %}active{% endif %} d-flex align-items-center justify-content-between"
-         href="{{ url_for('admin_pending') }}">
-        <span><i class="bi bi-person-check"></i> Подтверждение</span>
-        {% if pending_count > 0 %}
-        <span class="badge bg-danger rounded-pill">{{ pending_count }}</span>
-        {% endif %}
-      </a>
-    </li>
-  </ul>
+<aside class="crm-sidebar d-none d-md-flex flex-column">
 
-  {# ── Профиль в нижней части боковой панели ── #}
-  <div class="border-top pt-2 mt-2">
-    <a class="nav-link d-flex align-items-center gap-2 {% if request.endpoint == 'profile' %}active{% endif %}"
+  {# Логотип #}
+  <div class="crm-sidebar-logo">
+    <a href="{{ url_for('admin_dashboard') }}">
+      <div class="logo-icon"><i class="bi bi-building text-white"></i></div>
+      <span>Штаб отделки</span>
+    </a>
+  </div>
+
+  {# Навигация #}
+  <nav class="crm-sidebar-nav">
+    <a class="crm-sidebar-link {% if request.endpoint == 'admin_dashboard' %}active{% endif %}"
+       href="{{ url_for('admin_dashboard') }}">
+      <i class="bi bi-speedometer2"></i><span>Дашборд</span>
+    </a>
+
+    <div class="crm-sidebar-section">Объекты</div>
+    <a class="crm-sidebar-link {% if request.endpoint in ['admin_buildings','admin_building_add','admin_building_edit'] %}active{% endif %}"
+       href="{{ url_for('admin_buildings') }}">
+      <i class="bi bi-buildings"></i><span>Жилые комплексы</span>
+    </a>
+
+    <div class="crm-sidebar-section">Справочники</div>
+    <a class="crm-sidebar-link {% if request.endpoint == 'admin_stages_template' %}active{% endif %}"
+       href="{{ url_for('admin_stages_template') }}">
+      <i class="bi bi-list-check"></i><span>Этапы</span>
+    </a>
+
+    <div class="crm-sidebar-section">Управление</div>
+    <a class="crm-sidebar-link {% if request.endpoint == 'admin_users' %}active{% endif %}"
+       href="{{ url_for('admin_users') }}">
+      <i class="bi bi-people"></i><span>Пользователи</span>
+    </a>
+    <a class="crm-sidebar-link {% if request.endpoint == 'admin_guest_tokens' %}active{% endif %}"
+       href="{{ url_for('admin_guest_tokens') }}">
+      <i class="bi bi-key"></i><span>Гостевые доступы</span>
+    </a>
+    <a class="crm-sidebar-link {% if request.endpoint == 'admin_export' %}active{% endif %}"
+       href="{{ url_for('admin_export') }}">
+      <i class="bi bi-file-earmark-excel"></i><span>Экспорт Excel</span>
+    </a>
+    <a class="crm-sidebar-link {% if request.endpoint in ['admin_pending','admin_pending_approve','admin_pending_reject'] %}active{% endif %}"
+       href="{{ url_for('admin_pending') }}">
+      <i class="bi bi-person-check"></i><span>Подтверждение</span>
+      {% if pending_count > 0 %}
+        <span class="badge bg-danger">{{ pending_count }}</span>
+      {% endif %}
+    </a>
+  </nav>
+
+  {# Низ: профиль + выход #}
+  <div class="crm-sidebar-footer">
+    <a class="crm-sidebar-link {% if request.endpoint == 'profile' %}active{% endif %}"
        href="{{ url_for('profile') }}">
       {% if current_user.avatar %}
         <img src="{{ url_for('static', filename='avatars/' + current_user.avatar) }}"
-             class="sidebar-avatar" alt="Аватар"
+             class="crm-sidebar-avatar" alt="Аватар"
              onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'">
-        <span class="sidebar-avatar-circle" style="display:none">{{ current_user.initials }}</span>
+        <span class="crm-sidebar-avatar-circle" style="display:none">{{ current_user.initials }}</span>
       {% else %}
-        <span class="sidebar-avatar-circle">{{ current_user.initials }}</span>
+        <span class="crm-sidebar-avatar-circle">{{ current_user.initials }}</span>
       {% endif %}
-      <span class="small">Профиль</span>
+      <span>{{ current_user.full_name or current_user.username }}</span>
+    </a>
+    <a class="crm-sidebar-link" href="{{ url_for('logout') }}">
+      <i class="bi bi-box-arrow-right"></i><span>Выйти</span>
     </a>
   </div>
-</div>
+
+</aside>

@@ -4,59 +4,45 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ building.name }} — Штаб отделки</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="/static/css/crm.css" rel="stylesheet">
   <style>
-    body { background: #f8f9fa; }
-    .card { border: none; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
-    .table th {
-      background: #f1f3f5;
-      font-weight: 600;
-      font-size: .82rem;
-      text-transform: uppercase;
-      white-space: nowrap;
-    }
-    .progress { height: 10px; }
-
-    /* Цветовая индикация строк */
-    .stage-row-not_started td { background: #f8f9fa; }
-    .stage-row-in_progress td { background: #fff9e6; }
-    .stage-row-done       td { background: #f0faf4; }
-    .stage-row-overdue    td { background: #fff2f2; }
-
-    /* Логотип-ссылка */
-    .navbar-brand { font-weight: 700; }
-    .navbar-brand:hover { opacity: .85; }
+    .stage-row-in_progress td { background: #FFFBEB; }
+    .stage-row-done       td { background: #F0FDF4; }
+    .stage-row-overdue    td { background: #FEF2F2; }
   </style>
 </head>
-<body>
+<body style="background:var(--bg)">
 
 {# ── Навбар ─────────────────────────────────────────────────── #}
-<nav class="navbar navbar-dark bg-primary sticky-top mb-0">
-  <div class="container-fluid">
-    <a class="navbar-brand" href="/guest/{{ token }}">
-      <i class="bi bi-hammer me-2"></i>Штаб отделки
-    </a>
-    <span class="navbar-text small">
-      <i class="bi bi-buildings me-1"></i><strong>{{ building.name }}</strong>
-    </span>
-  </div>
+<nav style="background:var(--sidebar-bg);height:56px;display:flex;align-items:center;padding:0 20px;gap:12px;position:sticky;top:0;z-index:100;box-shadow:0 1px 4px rgba(0,0,0,.2)">
+  <a href="/guest/{{ token }}" style="display:flex;align-items:center;gap:8px;text-decoration:none">
+    <div style="width:30px;height:30px;border-radius:7px;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff">
+      <i class="bi bi-building"></i>
+    </div>
+    <span style="color:#fff;font-weight:700;font-size:14px">Штаб отделки</span>
+  </a>
+  <span style="color:var(--sidebar-text);font-size:13px;margin-left:8px">
+    <i class="bi bi-buildings me-1"></i><strong>{{ building.name }}</strong>
+  </span>
 </nav>
 
-<div class="container-fluid px-2 px-md-4 py-3">
+<div class="container-fluid px-2 px-md-4 py-3" style="max-width:960px">
 
-  {# ── Квартиры ──────────────────────────────────────────────── #}
   {% for item in apt_data %}
   {% set apt = item.apt %}
   <div class="card mb-4">
 
-    {# Заголовок с прогресс-баром #}
-    <div class="card-header py-2">
+    <div class="card-header py-3" style="background:var(--table-head-bg);border-bottom:1px solid var(--border);border-radius:var(--radius-card) var(--radius-card) 0 0">
       <div class="d-flex justify-content-between align-items-center">
-        <strong>Квартира №{{ apt.number }}</strong>
-        <div class="d-flex align-items-center gap-2" style="min-width:120px; max-width:200px">
+        <strong style="font-size:15px">Квартира №{{ apt.number }}</strong>
+        <div class="d-flex align-items-center gap-2" style="min-width:120px;max-width:200px">
           <div class="progress flex-grow-1">
-            <div class="progress-bar bg-success" style="width:{{ item.pct }}%"></div>
+            <div class="progress-bar" style="width:{{ item.pct }}%"></div>
           </div>
           <small class="text-muted text-nowrap">{{ item.pct }}%</small>
         </div>
@@ -68,13 +54,12 @@
       {% endif %}
     </div>
 
-    {# Таблица этапов #}
     <div class="card-body p-0">
       <div class="table-responsive">
         <table class="table mb-0 align-middle">
           <thead>
             <tr>
-              <th class="d-none d-sm-table-cell" style="width:32px">#</th>
+              <th class="d-none d-sm-table-cell" style="width:36px">#</th>
               <th>Этап</th>
               <th>Дедлайн</th>
               <th>Статус</th>
@@ -92,7 +77,7 @@
                 {% if s.status == 'not_started' %}
                   <span class="badge bg-secondary">Не начат</span>
                 {% elif s.status == 'in_progress' %}
-                  <span class="badge bg-warning text-dark">В работе</span>
+                  <span class="badge bg-primary">В работе</span>
                 {% elif s.status == 'done' %}
                   <span class="badge bg-success">Завершён</span>
                 {% else %}

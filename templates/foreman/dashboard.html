@@ -1,31 +1,39 @@
 {% extends 'base.html' %}
 {% block title %}Мои квартиры — Штаб отделки{% endblock %}
+{% block page_heading %}Мои квартиры{% endblock %}
 
 {% block sidebar %}
-<div class="col-auto col-md-2 sidebar py-3 px-2 d-none d-md-flex flex-column">
-  <ul class="nav flex-column flex-grow-1">
-    <li class="nav-item">
-      <a class="nav-link {% if request.endpoint == 'foreman_dashboard' %}active{% endif %}"
-         href="{{ url_for('foreman_dashboard') }}">
-        <i class="bi bi-house-door"></i> Мои квартиры
-      </a>
-    </li>
-  </ul>
-  <div class="border-top pt-2 mt-2">
-    <a class="nav-link d-flex align-items-center gap-2 {% if request.endpoint == 'profile' %}active{% endif %}"
+<aside class="crm-sidebar d-none d-md-flex flex-column">
+  <div class="crm-sidebar-logo">
+    <a href="{{ url_for('foreman_dashboard') }}">
+      <div class="logo-icon"><i class="bi bi-building text-white"></i></div>
+      <span>Штаб отделки</span>
+    </a>
+  </div>
+  <nav class="crm-sidebar-nav">
+    <a class="crm-sidebar-link {% if request.endpoint == 'foreman_dashboard' %}active{% endif %}"
+       href="{{ url_for('foreman_dashboard') }}">
+      <i class="bi bi-house-door"></i><span>Мои квартиры</span>
+    </a>
+  </nav>
+  <div class="crm-sidebar-footer">
+    <a class="crm-sidebar-link {% if request.endpoint == 'profile' %}active{% endif %}"
        href="{{ url_for('profile') }}">
       {% if current_user.avatar %}
         <img src="{{ url_for('static', filename='avatars/' + current_user.avatar) }}"
-             class="sidebar-avatar" alt=""
+             class="crm-sidebar-avatar" alt=""
              onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'">
-        <span class="sidebar-avatar-circle" style="display:none">{{ current_user.initials }}</span>
+        <span class="crm-sidebar-avatar-circle" style="display:none">{{ current_user.initials }}</span>
       {% else %}
-        <span class="sidebar-avatar-circle">{{ current_user.initials }}</span>
+        <span class="crm-sidebar-avatar-circle">{{ current_user.initials }}</span>
       {% endif %}
-      <span class="small">Профиль</span>
+      <span>{{ current_user.full_name or current_user.username }}</span>
+    </a>
+    <a class="crm-sidebar-link" href="{{ url_for('logout') }}">
+      <i class="bi bi-box-arrow-right"></i><span>Выйти</span>
     </a>
   </div>
-</div>
+</aside>
 {% endblock %}
 
 {% block content %}
@@ -379,68 +387,6 @@
 
 
 {% block scripts %}
-<style>
-  .apt-card {
-    border-radius: 12px;
-    box-shadow: 0 1px 6px rgba(0,0,0,.09);
-    overflow: hidden;
-    transition: box-shadow .15s ease;
-  }
-  .apt-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.13); }
-  .apt-card--done { border: 2px solid #198754; }
-
-  .apt-card__header {
-    padding: 16px 20px;
-    cursor: pointer;
-    border-radius: 12px;
-    transition: background .12s ease;
-  }
-  .apt-card__header:hover  { background: #f5f7fa !important; }
-  .apt-card__header:focus  { outline: none; box-shadow: 0 0 0 3px rgba(13,110,253,.25); }
-  .apt-card__header[aria-expanded="true"] .apt-card__arrow i { transform: rotate(180deg); }
-  .apt-card__arrow i { transition: transform .25s ease; display: inline-block; }
-
-  .apt-card__body { border-top: 1px solid #e9ecef; background: #fff; }
-
-  .action-btn { min-height: 40px; min-width: 40px; padding: 6px 12px; }
-  @media (max-width: 576px) {
-    .apt-card__header { padding: 14px 16px; }
-    .action-btn { padding: 8px 10px; }
-  }
-
-  /* Превью фото в модалке */
-  .photo-thumb-wrap {
-    position: relative;
-    aspect-ratio: 1;
-    overflow: hidden;
-    border-radius: 8px;
-    background: #f1f3f5;
-  }
-  .photo-thumb-wrap img {
-    width: 100%; height: 100%;
-    object-fit: cover;
-    display: block;
-  }
-  .photo-thumb-wrap .remove-photo {
-    position: absolute; top: 4px; right: 4px;
-    background: rgba(0,0,0,.55); color: #fff;
-    border: none; border-radius: 50%;
-    width: 22px; height: 22px;
-    font-size: 12px; line-height: 1;
-    cursor: pointer; display: flex;
-    align-items: center; justify-content: center;
-    padding: 0;
-  }
-  /* Галерея просмотра */
-  .gallery-img {
-    width: 100%; aspect-ratio: 1;
-    object-fit: cover; border-radius: 8px;
-    cursor: zoom-in;
-    transition: opacity .15s;
-  }
-  .gallery-img:hover { opacity: .85; }
-</style>
-
 <script>
 // ── Модалка «Причина возврата» ──────────────────────────────────
 const rrModal = document.getElementById('reworkReasonModal')

@@ -1,47 +1,69 @@
 {% extends 'base.html' %}
 {% block title %}Дашборд — Штаб отделки{% endblock %}
+{% block page_heading %}Дашборд{% endblock %}
 
-{% block sidebar %}
-{% include 'admin/_sidebar.html' %}
-{% endblock %}
+{% block sidebar %}{% include 'admin/_sidebar.html' %}{% endblock %}
 
 {% block content %}
-<h4 class="fw-bold mb-4"><i class="bi bi-speedometer2 me-2"></i>Дашборд</h4>
+<h4 class="fw-bold mb-4"><i class="bi bi-speedometer2 me-2 text-primary"></i>Дашборд</h4>
 
+{# ── Карточки статистики ── #}
 <div class="row g-3 mb-4">
-  <div class="col-12 col-md-3">
-    <div class="card p-3 d-flex flex-row flex-md-column align-items-center align-items-md-center gap-3 gap-md-0 text-md-center">
-      <div class="fs-1 fw-bold text-primary lh-1">{{ total }}</div>
-      <div class="text-muted small">Всего квартир</div>
+  <div class="col-12 col-sm-6 col-xl-3">
+    <div class="stat-card">
+      <div class="stat-card-icon" style="background:#EFF6FF">
+        <i class="bi bi-building" style="color:#3B82F6"></i>
+      </div>
+      <div>
+        <div class="stat-card-value">{{ total }}</div>
+        <div class="stat-card-label">Всего квартир</div>
+      </div>
     </div>
   </div>
-  <div class="col-12 col-md-3">
-    <div class="card p-3 d-flex flex-row flex-md-column align-items-center align-items-md-center gap-3 gap-md-0 text-md-center">
-      <div class="fs-1 fw-bold text-warning lh-1">{{ in_progress }}</div>
-      <div class="text-muted small">В работе</div>
+  <div class="col-12 col-sm-6 col-xl-3">
+    <div class="stat-card">
+      <div class="stat-card-icon" style="background:#FEF3C7">
+        <i class="bi bi-tools" style="color:#F59E0B"></i>
+      </div>
+      <div>
+        <div class="stat-card-value">{{ in_progress }}</div>
+        <div class="stat-card-label">В работе</div>
+      </div>
     </div>
   </div>
-  <div class="col-12 col-md-3">
-    <div class="card p-3 d-flex flex-row flex-md-column align-items-center align-items-md-center gap-3 gap-md-0 text-md-center">
-      <div class="fs-1 fw-bold text-success lh-1">{{ done_apts }}</div>
-      <div class="text-muted small">Завершено</div>
+  <div class="col-12 col-sm-6 col-xl-3">
+    <div class="stat-card">
+      <div class="stat-card-icon" style="background:#D1FAE5">
+        <i class="bi bi-check-circle" style="color:#10B981"></i>
+      </div>
+      <div>
+        <div class="stat-card-value">{{ done_apts }}</div>
+        <div class="stat-card-label">Завершено</div>
+      </div>
     </div>
   </div>
-  <div class="col-12 col-md-3">
-    <div class="card p-3 d-flex flex-row flex-md-column align-items-center align-items-md-center gap-3 gap-md-0 text-md-center">
-      <div class="fs-1 fw-bold text-danger lh-1">{{ overdue }}</div>
-      <div class="text-muted small">Просрочено</div>
+  <div class="col-12 col-sm-6 col-xl-3">
+    <div class="stat-card">
+      <div class="stat-card-icon" style="background:#FEE2E2">
+        <i class="bi bi-exclamation-triangle" style="color:#EF4444"></i>
+      </div>
+      <div>
+        <div class="stat-card-value">{{ overdue }}</div>
+        <div class="stat-card-label">Просрочено</div>
+      </div>
     </div>
   </div>
 </div>
 
-
+{# ── Список ЖК ── #}
 <div class="card p-3">
-  <h6 class="fw-bold mb-3">Жилые комплексы</h6>
+  <h6 class="fw-semibold mb-3" style="color:var(--text-main)">Жилые комплексы</h6>
   {% if buildings %}
   <div class="list-group list-group-flush">
     {% for b in buildings %}
-    <a href="{{ url_for('admin_apartments', bid=b.id) }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+    <a href="{{ url_for('admin_apartments', bid=b.id) }}"
+       class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+       style="border-color:var(--border)">
       <div>
         <i class="bi bi-buildings me-2 text-primary"></i>
         <strong>{{ b.name }}</strong>
@@ -52,7 +74,7 @@
     {% endfor %}
   </div>
   {% else %}
-  <p class="text-muted">Пока нет ЖК. <a href="{{ url_for('admin_building_add') }}">Создать первый</a>.</p>
+  <p class="text-muted mb-0">Пока нет ЖК. <a href="{{ url_for('admin_building_add') }}">Создать первый</a>.</p>
   {% endif %}
 </div>
 {% endblock %}
