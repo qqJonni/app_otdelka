@@ -98,7 +98,7 @@
               </th>
               <th>Этап</th>
               <th style="min-width:130px">Дедлайн</th>
-              <th style="min-width:90px">Объём, кв.м</th>
+              <th style="min-width:140px">Объём</th>
             </tr>
           </thead>
           <tbody>
@@ -119,9 +119,17 @@
                        class="form-control form-control-sm stage-field">
               </td>
               <td>
-                <input type="number" step="0.01" min="0"
-                       name="stage_volume_{{ t.id }}" placeholder="0"
-                       class="form-control form-control-sm stage-field">
+                <div class="input-group input-group-sm">
+                  <input type="number" step="0.01" min="0"
+                         name="stage_volume_{{ t.id }}" placeholder="0"
+                         class="form-control stage-field">
+                  <select name="stage_unit_{{ t.id }}" class="form-select stage-field"
+                          style="max-width:80px">
+                    {% for u in UNITS %}
+                    <option value="{{ u }}" {% if (t.default_unit or 'м2') == u %}selected{% endif %}>{{ u }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
               </td>
             </tr>
             {% endfor %}

@@ -69,7 +69,14 @@
             {% for s in item.stages %}
             <tr class="stage-row-{{ s.status }}">
               <td class="text-muted small d-none d-sm-table-cell">{{ s.order_num }}</td>
-              <td>{{ s.stage_name }}</td>
+              <td>
+                {{ s.stage_name }}
+                {% if s.volume_sqm %}
+                <span class="text-muted small ms-1">
+                  {{ s.volume_sqm | int if s.volume_sqm == s.volume_sqm | int else s.volume_sqm }} {{ s.unit or 'м2' }}
+                </span>
+                {% endif %}
+              </td>
               <td class="small text-nowrap {% if s.status == 'overdue' %}text-danger fw-semibold{% else %}text-muted{% endif %}">
                 {{ s.deadline if s.deadline else '—' }}
               </td>

@@ -7,15 +7,28 @@
 <h4 class="fw-bold mb-4"><i class="bi bi-list-check me-2"></i>Справочник этапов</h4>
 
 <!-- Форма добавления -->
-<div class="card p-3 mb-4" style="max-width:500px">
+<div class="card p-3 mb-4" style="max-width:600px">
   <h6 class="fw-bold mb-3">Добавить этап</h6>
   <form method="post" action="{{ url_for('admin_stages_template_add') }}">
-    <div class="mb-2">
-      <input type="text" name="name" class="form-control" placeholder="Название этапа" required>
+    <div class="row g-2 align-items-end">
+      <div class="col-12 col-sm-6">
+        <label class="form-label">Название этапа</label>
+        <input type="text" name="name" class="form-control" placeholder="Название этапа" required>
+      </div>
+      <div class="col-12 col-sm-4">
+        <label class="form-label">Ед. изм. по умолчанию</label>
+        <select name="default_unit" class="form-select">
+          {% for u in UNITS %}
+          <option value="{{ u }}" {% if u == 'м2' %}selected{% endif %}>{{ u }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-sm-2">
+        <button type="submit" class="btn btn-primary w-100">
+          <i class="bi bi-plus-lg"></i>
+        </button>
+      </div>
     </div>
-    <button type="submit" class="btn btn-primary btn-sm">
-      <i class="bi bi-plus-lg me-1"></i>Добавить
-    </button>
   </form>
 </div>
 
@@ -24,35 +37,47 @@
   <table class="table table-hover mb-0 align-top">
     <thead>
       <tr>
-        <th style="width:40px">#</th>
-        <th style="width:220px">Название этапа</th>
+        <th style="width:36px">#</th>
+        <th style="width:200px">Название</th>
         <th>Состав работ</th>
-        <th style="width:100px"></th>
+        <th style="width:130px">Ед. изм. по умолч.</th>
+        <th style="width:80px"></th>
       </tr>
     </thead>
     <tbody>
       {% for t in templates %}
       <tr>
         <td class="text-muted pt-3">{{ t.default_order }}</td>
-        <td colspan="0">
+        <td>
           <form method="post" action="{{ url_for('admin_stages_template_update', tid=t.id) }}"
                 id="form-tpl-{{ t.id }}">
             <input type="text" name="name" value="{{ t.name }}"
                    class="form-control form-control-sm mb-2" required>
             <textarea name="work_description" rows="3"
                       class="form-control form-control-sm"
-                      placeholder="Описание состава работ для бригадиров...">{{ t.work_description or '' }}</textarea>
+                      placeholder="Описание состава работ...">{{ t.work_description or '' }}</textarea>
+            {# Скрытое поле unit — обновляется из отдельного select ниже #}
+            <input type="hidden" name="default_unit" id="unit_hidden_{{ t.id }}"
+                   value="{{ t.default_unit or 'м2' }}">
           </form>
         </td>
-        <td class="pt-3 ps-2 text-muted small" style="max-width:0"></td>
-        <td class="pt-3 text-end text-nowrap">
-          <button type="submit" form="form-tpl-{{ t.id }}" class="btn btn-outline-primary btn-sm">
+        <td class="pt-2 text-muted small" style="max-width:0"></td>
+        <td class="pt-2">
+          <select class="form-select form-select-sm"
+                  onchange="document.getElementById('unit_hidden_{{ t.id }}').value=this.value">
+            {% for u in UNITS %}
+            <option value="{{ u }}" {% if (t.default_unit or 'м2') == u %}selected{% endif %}>{{ u }}</option>
+            {% endfor %}
+          </select>
+        </td>
+        <td class="pt-2 text-end text-nowrap">
+          <button type="submit" form="form-tpl-{{ t.id }}" class="btn btn-outline-primary btn-sm" title="Сохранить">
             <i class="bi bi-check-lg"></i>
           </button>
           <form method="post" action="{{ url_for('admin_stages_template_delete', tid=t.id) }}"
                 class="d-inline"
                 onsubmit="return confirm('Удалить «{{ t.name }}» из шаблона?')">
-            <button class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i></button>
+            <button class="btn btn-outline-danger btn-sm" title="Удалить"><i class="bi bi-trash"></i></button>
           </form>
         </td>
       </tr>

@@ -39,7 +39,8 @@
         <tr>
           <th style="width:72px" class="text-center">Порядок</th>
           <th>Этап</th>
-          <th class="d-none d-md-table-cell">Объём, кв.м</th>
+          <th class="d-none d-md-table-cell">Объём</th>
+          <th class="d-none d-md-table-cell" style="width:70px">Ед. изм.</th>
           <th>Дедлайн</th>
           <th>Статус</th>
           <th class="d-none d-lg-table-cell">Завершён</th>
@@ -77,11 +78,12 @@
                data-bs-toggle="tooltip" data-bs-placement="right"></i>
             {% endif %}
             {% if s.volume_sqm %}
-            <div class="text-muted small d-md-none">{{ s.volume_sqm }} кв.м</div>
+            <div class="text-muted small d-md-none">{{ s.volume_sqm }} {{ s.unit or 'м2' }}</div>
             {% endif %}
           </td>
 
           <td class="d-none d-md-table-cell">{{ s.volume_sqm if s.volume_sqm else '—' }}</td>
+          <td class="d-none d-md-table-cell text-muted small">{{ s.unit or 'м2' }}</td>
 
           <td class="small text-nowrap">
             {% if s.deadline %}
@@ -215,10 +217,10 @@
         <div class="modal-body">
           <div class="mb-3">
             <label class="form-label fw-semibold">Этап <span class="text-danger">*</span></label>
-            <select name="stage_name" class="form-select" required>
+            <select name="stage_name" class="form-select" id="addStageSelect" required>
               <option value="">— выбрать из справочника —</option>
               {% for t in available %}
-              <option value="{{ t.name }}">{{ t.name }}</option>
+              <option value="{{ t.name }}" data-unit="{{ t.default_unit or 'м2' }}">{{ t.name }}</option>
               {% endfor %}
             </select>
           </div>
@@ -228,8 +230,15 @@
               <input type="date" name="deadline" class="form-control">
             </div>
             <div class="col-6">
-              <label class="form-label fw-semibold">Объём, кв.м</label>
-              <input type="number" step="0.01" min="0" name="volume_sqm" class="form-control" placeholder="0">
+              <label class="form-label fw-semibold">Объём</label>
+              <div class="input-group">
+                <input type="number" step="0.01" min="0" name="volume_sqm" class="form-control" placeholder="0">
+                <select name="unit" class="form-select" style="max-width:80px">
+                  {% for u in UNITS %}
+                  <option value="{{ u }}" {% if u == 'м2' %}selected{% endif %}>{{ u }}</option>
+                  {% endfor %}
+                </select>
+              </div>
             </div>
           </div>
         </div>
@@ -379,6 +388,23 @@
   document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el =>
     new bootstrap.Tooltip(el, { trigger: 'hover' })
   )
+
+  // Автоподстановка единицы измерения при выборе этапа в модалке добавления
+  const addStageSelect = document.getElementById('addStageSelect')
+  if (addStageSelect) {
+    addStageSelect.addEventListener('change', function() {
+      const opt = this.options[this.selectedIndex]
+      const unit = opt.dataset.unit || 'м2'
+      const unitSelect = this.closest('form').querySelector('select[name="unit"]')
+      if (unitSelect) {
+        for (let i = 0; i < unitSelect.options.length; i++) {
+          if (unitSelect.options[i].value === unit) {
+            unitSelect.selectedIndex = i; break
+          }
+        }
+      }
+    })
+  }
 
   // ── Общая функция управления загрузкой фото ────────────────────
   const MAX_PHOTOS = 30

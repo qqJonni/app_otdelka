@@ -18,9 +18,16 @@
 <div class="card p-4" style="max-width:520px">
   <form method="post">
     <div class="mb-3">
-      <label class="form-label fw-semibold">Объём, кв.м</label>
-      <input type="number" step="0.01" min="0" name="volume_sqm" class="form-control"
-             value="{{ stage.volume_sqm if stage.volume_sqm else '' }}">
+      <label class="form-label fw-semibold">Объём</label>
+      <div class="input-group">
+        <input type="number" step="0.01" min="0" name="volume_sqm" class="form-control"
+               value="{{ stage.volume_sqm if stage.volume_sqm else '' }}" placeholder="0">
+        <select name="unit" class="form-select" style="max-width:100px">
+          {% for u in UNITS %}
+          <option value="{{ u }}" {% if (stage.unit or 'м2') == u %}selected{% endif %}>{{ u }}</option>
+          {% endfor %}
+        </select>
+      </div>
     </div>
     <div class="mb-3">
       <label class="form-label fw-semibold">

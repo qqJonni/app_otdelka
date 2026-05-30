@@ -45,6 +45,24 @@ DEFAULT_STAGES = [
     'Финишная уборка',
 ]
 
+# Справочник единиц измерения (фиксированный, не редактируется)
+UNITS = ['м2', 'м.пог.', 'шт.', 'м3', 'м']
+
+# Единицы измерения по умолчанию для стандартных этапов
+DEFAULT_UNIT_MAP = {
+    'Стяжка пола':                                    'м2',
+    'Штукатурка стен':                                'м2',
+    'Шпатлёвка стен и откосов':                       'м2',
+    'Грунтовка':                                      'м2',
+    'Укладка напольного покрытия':                    'м2',
+    'Поклейка обоев / покраска стен':                 'м2',
+    'Установка межкомнатных дверей':                  'шт.',
+    'Установка плинтусов':                            'м.пог.',
+    'Сантехническая разводка и установка приборов':   'шт.',
+    'Электромонтажные работы':                        'шт.',
+    'Финишная уборка':                                'м2',
+}
+
 
 # ─── Database ────────────────────────────────────────────────────────────────
 
@@ -181,6 +199,16 @@ def run_migrations(db):
     if 'completed_at' not in cols:
         db.execute("ALTER TABLE apartments ADD COLUMN completed_at TEXT")
 
+    # stages_template.default_unit
+    cols = [r[1] for r in db.execute("PRAGMA table_info(stages_template)").fetchall()]
+    if 'default_unit' not in cols:
+        db.execute("ALTER TABLE stages_template ADD COLUMN default_unit TEXT NOT NULL DEFAULT 'м2'")
+
+    # apartment_stages.unit
+    cols = [r[1] for r in db.execute("PRAGMA table_info(apartment_stages)").fetchall()]
+    if 'unit' not in cols:
+        db.execute("ALTER TABLE apartment_stages ADD COLUMN unit TEXT NOT NULL DEFAULT 'м2'")
+
     db.commit()
 
     # Создать папки для файлов
@@ -226,7 +254,8 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT UNIQUE NOT NULL,
             default_order INTEGER NOT NULL DEFAULT 0,
-            work_description TEXT
+            work_description TEXT,
+            default_unit TEXT NOT NULL DEFAULT 'м2'
         );
 
         CREATE TABLE IF NOT EXISTS apartment_stages (
@@ -235,6 +264,7 @@ def init_db():
             stage_name TEXT NOT NULL,
             order_num INTEGER NOT NULL DEFAULT 0,
             volume_sqm REAL,
+            unit TEXT NOT NULL DEFAULT 'м2',
             deadline TEXT,
             status TEXT NOT NULL DEFAULT 'not_started'
                 CHECK(status IN ('not_started','in_progress','done','overdue','rework')),
@@ -297,8 +327,8 @@ def init_db():
     }
     for i, name in enumerate(DEFAULT_STAGES):
         db.execute(
-            'INSERT INTO stages_template (name,default_order,work_description) VALUES (?,?,?)',
-            (name, i + 1, stage_descriptions.get(name, ''))
+            'INSERT INTO stages_template (name,default_order,work_description,default_unit) VALUES (?,?,?,?)',
+            (name, i + 1, stage_descriptions.get(name, ''), DEFAULT_UNIT_MAP.get(name, 'м2'))
         )
 
     # Building
@@ -473,6 +503,7 @@ STATUS_LABEL = {
 
 app.jinja_env.globals['STATUS_LABEL'] = STATUS_LABEL
 app.jinja_env.globals['now'] = datetime.now
+app.jinja_env.globals['UNITS'] = UNITS
 
 
 # ─── Auth routes ─────────────────────────────────────────────────────────────
@@ -724,11 +755,15 @@ def admin_apartment_add(bid):
             except ValueError:
                 volume = None
 
+            unit = request.form.get(f'stage_unit_{t["id"]}', '').strip()
+            if unit not in UNITS:
+                unit = t['default_unit'] if t['default_unit'] else 'м2'
+
             execute_db(
                 '''INSERT INTO apartment_stages
-                   (apartment_id, stage_name, order_num, volume_sqm, deadline, status, work_description)
-                   VALUES (?,?,?,?,?,?,?)''',
-                [apt_id, t['name'], t['default_order'], volume, deadline,
+                   (apartment_id, stage_name, order_num, volume_sqm, unit, deadline, status, work_description)
+                   VALUES (?,?,?,?,?,?,?,?)''',
+                [apt_id, t['name'], t['default_order'], volume, unit, deadline,
                  'not_started', t['work_description'] or '']
             )
             added += 1
@@ -818,20 +853,26 @@ def admin_stage_add(apt_id):
         except ValueError:
             volume = None
 
+    unit = request.form.get('unit', '').strip()
+    if unit not in UNITS:
+        unit = 'м2'
+
     if stage_name:
         max_ord = query_db(
             'SELECT COALESCE(MAX(order_num), 0) as m FROM apartment_stages WHERE apartment_id=?',
             [apt_id], one=True
         )['m']
-        # Берём work_description из справочника, если есть
-        tpl = query_db('SELECT work_description FROM stages_template WHERE name=?',
+        # Берём work_description и default_unit из справочника, если есть
+        tpl = query_db('SELECT work_description, default_unit FROM stages_template WHERE name=?',
                        [stage_name], one=True)
         work_desc = tpl['work_description'] if tpl and tpl['work_description'] else ''
+        if unit == 'м2' and tpl and tpl['default_unit']:
+            unit = tpl['default_unit']
         execute_db(
             '''INSERT INTO apartment_stages
-               (apartment_id, stage_name, order_num, volume_sqm, deadline, status, work_description)
-               VALUES (?,?,?,?,?,?,?)''',
-            [apt_id, stage_name, max_ord + 1, volume, deadline, 'not_started', work_desc]
+               (apartment_id, stage_name, order_num, volume_sqm, unit, deadline, status, work_description)
+               VALUES (?,?,?,?,?,?,?,?)''',
+            [apt_id, stage_name, max_ord + 1, volume, unit, deadline, 'not_started', work_desc]
         )
         # Новый этап — квартира больше не завершена
         check_apartment_completion(apt_id)
@@ -901,11 +942,14 @@ def admin_stage_edit(stage_id):
         volume = request.form.get('volume_sqm') or None
         deadline = request.form.get('deadline') or None
         work_desc = request.form.get('work_description', '').strip()
+        unit = request.form.get('unit', '').strip()
+        if unit not in UNITS:
+            unit = 'м2'
         if volume:
             volume = float(volume)
         execute_db(
-            'UPDATE apartment_stages SET volume_sqm=?,deadline=?,work_description=? WHERE id=?',
-            [volume, deadline, work_desc, stage_id]
+            'UPDATE apartment_stages SET volume_sqm=?,unit=?,deadline=?,work_description=? WHERE id=?',
+            [volume, unit, deadline, work_desc, stage_id]
         )
         flash('Этап обновлён.', 'success')
         return redirect(url_for('admin_stages', apt_id=stage['apartment_id']))
@@ -927,10 +971,13 @@ def admin_stages_template():
 @admin_required
 def admin_stages_template_add():
     name = request.form.get('name', '').strip()
+    default_unit = request.form.get('default_unit', 'м2').strip()
+    if default_unit not in UNITS:
+        default_unit = 'м2'
     if name:
         max_order = query_db('SELECT MAX(default_order) as m FROM stages_template', one=True)['m'] or 0
-        execute_db('INSERT INTO stages_template (name,default_order,work_description) VALUES (?,?,?)',
-                   [name, max_order + 1, ''])
+        execute_db('INSERT INTO stages_template (name,default_order,work_description,default_unit) VALUES (?,?,?,?)',
+                   [name, max_order + 1, '', default_unit])
         flash('Этап добавлен в справочник.', 'success')
     return redirect(url_for('admin_stages_template'))
 
@@ -950,10 +997,13 @@ def admin_stages_template_delete(tid):
 def admin_stages_template_update(tid):
     name = request.form.get('name', '').strip()
     work_desc = request.form.get('work_description', '').strip()
+    default_unit = request.form.get('default_unit', 'м2').strip()
+    if default_unit not in UNITS:
+        default_unit = 'м2'
     if name:
         execute_db(
-            'UPDATE stages_template SET name=?,work_description=? WHERE id=?',
-            [name, work_desc, tid]
+            'UPDATE stages_template SET name=?,work_description=?,default_unit=? WHERE id=?',
+            [name, work_desc, default_unit, tid]
         )
         flash('Этап обновлён.', 'success')
     return redirect(url_for('admin_stages_template'))
@@ -1098,7 +1148,7 @@ def admin_export():
         date_to = request.form.get('date_to')
 
         rows = query_db(
-            '''SELECT a.number, s.stage_name, s.volume_sqm, s.completed_at
+            '''SELECT a.number, s.stage_name, s.volume_sqm, s.unit, s.completed_at
                FROM apartment_stages s
                JOIN apartments a ON s.apartment_id=a.id
                WHERE a.building_id=? AND s.status='done'
@@ -1116,7 +1166,7 @@ def admin_export():
         header_fill = PatternFill(fill_type='solid', fgColor='4472C4')
         header_font_white = Font(bold=True, color='FFFFFF')
 
-        headers = ['Номер квартиры', 'Этап', 'Объём (кв.м)', 'Дата завершения']
+        headers = ['Номер квартиры', 'Этап', 'Объём', 'Ед. изм.', 'Дата завершения']
         for col, h in enumerate(headers, 1):
             cell = ws.cell(row=1, column=col, value=h)
             cell.font = header_font_white
@@ -1127,10 +1177,11 @@ def admin_export():
             ws.cell(row=row_idx, column=1, value=row['number'])
             ws.cell(row=row_idx, column=2, value=row['stage_name'])
             ws.cell(row=row_idx, column=3, value=row['volume_sqm'])
+            ws.cell(row=row_idx, column=4, value=row['unit'] or 'м2')
             completed = row['completed_at']
             if completed:
                 completed = completed[:10]
-            ws.cell(row=row_idx, column=4, value=completed)
+            ws.cell(row=row_idx, column=5, value=completed)
 
         for col in ws.columns:
             max_len = max(len(str(cell.value or '')) for cell in col)

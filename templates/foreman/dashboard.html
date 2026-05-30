@@ -148,6 +148,11 @@
                     {{ s.stage_name }}
                   </span>
                   {# Кнопки для info #}
+                  {% if s.volume_sqm %}
+                  <span class="badge bg-secondary ms-1" style="font-weight:500;font-size:11px">
+                    {{ s.volume_sqm | int if s.volume_sqm == s.volume_sqm | int else s.volume_sqm }} {{ s.unit or 'м2' }}
+                  </span>
+                  {% endif %}
                   {% if s.work_description and s.work_description.strip() %}
                   <button type="button"
                           class="btn btn-link btn-sm p-0 ms-1 text-muted align-baseline"
