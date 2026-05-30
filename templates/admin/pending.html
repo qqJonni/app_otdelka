@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% block title %}Подтверждение пользователей{% endblock %}
+{% block sidebar %}{% include 'admin/_sidebar.html' %}{% endblock %}
+
+{% block content %}
+<h4 class="fw-bold mb-4">
+  <i class="bi bi-person-check me-2"></i>Подтверждение пользователей
+  {% if pending %}
+  <span class="badge bg-danger ms-1">{{ pending|length }}</span>
+  {% endif %}
+</h4>
+
+{% if pending %}
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0 align-middle">
+      <thead>
+        <tr>
+          <th>Логин</th>
+          <th class="d-none d-sm-table-cell">Имя</th>
+          <th>Роль</th>
+          <th class="d-none d-md-table-cell">Дата регистрации</th>
+          <th>Действия</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in pending %}
+        <tr>
+          <td>
+            <div class="fw-semibold font-monospace">{{ u.username }}</div>
+            {% if u.full_name %}
+            <div class="text-muted small d-sm-none">{{ u.full_name }}</div>
+            {% endif %}
+          </td>
+          <td class="d-none d-sm-table-cell">{{ u.full_name or '—' }}</td>
+          <td>
+            {% if u.role == 'foreman' %}
+              <span class="badge bg-primary">Бригадир</span>
+            {% else %}
+              <span class="badge bg-secondary">Гость</span>
+            {% endif %}
+          </td>
+          <td class="text-muted small d-none d-md-table-cell">
+            {{ u.created_at[:16] if u.created_at else '—' }}
+          </td>
+          <td class="text-nowrap">
+            <form method="post" action="{{ url_for('admin_pending_approve', uid=u.id) }}"
+                  class="d-inline">
+              <button type="submit" class="btn btn-success btn-sm">
+                <i class="bi bi-check-lg me-1"></i>Подтвердить
+              </button>
+            </form>
+            <form method="post" action="{{ url_for('admin_pending_reject', uid=u.id) }}"
+                  class="d-inline ms-1"
+                  onsubmit="return confirm('Отклонить и удалить пользователя «{{ u.username }}»?')">
+              <button type="submit" class="btn btn-danger btn-sm">
+                <i class="bi bi-x-lg me-1"></i>Отклонить
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card p-4 text-center text-muted">
+  <i class="bi bi-person-check fs-1 mb-2 text-success"></i>
+  <p class="mb-0">Нет пользователей, ожидающих подтверждения.</p>
+</div>
+{% endif %}
+{% endblock %}

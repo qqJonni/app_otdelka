@@ -34,9 +34,14 @@
       <tbody>
         {% for apt in apartments %}
         {% set stat = apt_stats[apt.id] %}
-        <tr>
+        <tr {% if apt.completed_at %}class="table-success"{% endif %}>
           <td>
-            <div class="fw-semibold">Кв. {{ apt.number }}</div>
+            <div class="fw-semibold">
+              Кв. {{ apt.number }}
+              {% if apt.completed_at %}
+              <i class="bi bi-check-circle-fill text-success ms-1" title="Квартира выполнена"></i>
+              {% endif %}
+            </div>
             {# Бригадир — показываем под номером на мобильных #}
             <div class="text-muted small d-md-none">
               {{ apt.foreman_name or 'без бригадира' }}

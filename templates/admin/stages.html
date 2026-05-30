@@ -12,7 +12,12 @@
 </div>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
-  <h4 class="fw-bold mb-0"><i class="bi bi-list-task me-2"></i>Квартира №{{ apt.number }}</h4>
+  <div class="d-flex align-items-center gap-2">
+    <h4 class="fw-bold mb-0"><i class="bi bi-list-task me-2"></i>Квартира №{{ apt.number }}</h4>
+    {% if apt.completed_at %}
+    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Выполнена</span>
+    {% endif %}
+  </div>
   <div class="d-flex gap-2">
     {% if available %}
     <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#addStageModal">
@@ -36,45 +41,37 @@
           <th class="d-none d-md-table-cell">Объём, кв.м</th>
           <th>Дедлайн</th>
           <th>Статус</th>
-          <th class="d-none d-lg-table-cell">Начат</th>
           <th class="d-none d-lg-table-cell">Завершён</th>
+          <th>Фото</th>
           <th style="width:80px"></th>
         </tr>
       </thead>
       <tbody>
         {% for s in stages %}
         {% set lbl = STATUS_LABEL[s.status] %}
-        {% set is_first = loop.first %}
-        {% set is_last  = loop.last %}
         <tr>
-          {# ── Стрелки сортировки ── #}
+          {# Стрелки порядка #}
           <td class="text-center text-nowrap p-1">
-            <form method="post"
-                  action="{{ url_for('admin_stage_move', stage_id=s.id, direction='up') }}"
-                  class="d-inline">
-              <button class="btn btn-sm btn-outline-secondary py-0 px-1 {% if is_first %}disabled{% endif %}"
-                      {% if is_first %}type="button"{% endif %}
-                      title="Выше">
+            <form method="post" action="{{ url_for('admin_stage_move', stage_id=s.id, direction='up') }}" class="d-inline">
+              <button class="btn btn-sm btn-outline-secondary py-0 px-1 {% if loop.first %}disabled{% endif %}"
+                      {% if loop.first %}type="button"{% endif %} title="Выше">
                 <i class="bi bi-chevron-up"></i>
               </button>
             </form>
-            <form method="post"
-                  action="{{ url_for('admin_stage_move', stage_id=s.id, direction='down') }}"
-                  class="d-inline ms-1">
-              <button class="btn btn-sm btn-outline-secondary py-0 px-1 {% if is_last %}disabled{% endif %}"
-                      {% if is_last %}type="button"{% endif %}
-                      title="Ниже">
+            <form method="post" action="{{ url_for('admin_stage_move', stage_id=s.id, direction='down') }}" class="d-inline ms-1">
+              <button class="btn btn-sm btn-outline-secondary py-0 px-1 {% if loop.last %}disabled{% endif %}"
+                      {% if loop.last %}type="button"{% endif %} title="Ниже">
                 <i class="bi bi-chevron-down"></i>
               </button>
             </form>
           </td>
 
-          {# ── Название этапа ── #}
+          {# Название #}
           <td>
             <span class="fw-semibold">{{ s.stage_name }}</span>
             {% if s.work_description %}
             <i class="bi bi-info-circle text-muted ms-1"
-               style="cursor:default; font-size:.85rem"
+               style="cursor:default;font-size:.85rem"
                title="{{ s.work_description }}"
                data-bs-toggle="tooltip" data-bs-placement="right"></i>
             {% endif %}
@@ -90,27 +87,97 @@
               <span class="{% if s.status == 'overdue' %}text-danger fw-semibold{% else %}text-muted{% endif %}">
                 {{ s.deadline }}
               </span>
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+
+          <td class="text-nowrap">
+            {# Rework + просрочен визуально #}
+            {% if s.status == 'rework' %}
+              {% set today_str = now().strftime('%Y-%m-%d') %}
+              {% if s.deadline and s.deadline < today_str %}
+                <span class="badge bg-danger">Просрочен</span>
+              {% else %}
+                <span class="badge bg-warning text-dark">На доработку</span>
+              {% endif %}
             {% else %}
-              <span class="text-muted">—</span>
+              <span class="badge bg-{{ lbl[1] }} {% if s.status == 'in_progress' %}text-dark{% endif %}">{{ lbl[0] }}</span>
+            {% endif %}
+            {# Счётчик возвратов #}
+            {% if s.rework_count and s.rework_count > 0 %}
+            <span class="badge bg-light text-warning border border-warning ms-1 d-none d-md-inline"
+                  {% if s.rework_reason %}
+                  data-bs-toggle="tooltip" title="Причина: {{ s.rework_reason }}"
+                  {% endif %}>
+              ↩ {{ s.rework_count }}
+            </span>
             {% endif %}
           </td>
 
-          <td><span class="badge bg-{{ lbl[1] }}">{{ lbl[0] }}</span></td>
+          <td class="small text-muted d-none d-lg-table-cell">
+            {{ s.completed_at[:10] if s.completed_at else '—' }}
+          </td>
 
-          <td class="small text-muted d-none d-lg-table-cell">{{ s.started_at[:10] if s.started_at else '—' }}</td>
-          <td class="small text-muted d-none d-lg-table-cell">{{ s.completed_at[:10] if s.completed_at else '—' }}</td>
+          {# Фото #}
+          <td class="text-nowrap">
+            {% if s.photos %}
+              {# Просмотр #}
+              <button type="button"
+                      class="btn btn-sm btn-outline-secondary"
+                      title="Смотреть фото ({{ s.photos.split(',')|length }} шт.)"
+                      data-bs-toggle="modal" data-bs-target="#photosModal"
+                      data-stage-name="{{ s.stage_name | e }}"
+                      data-apt-id="{{ apt.id }}"
+                      data-stage-id="{{ s.id }}"
+                      data-photos="{{ s.photos }}">
+                <i class="bi bi-images"></i>
+                <span class="d-none d-md-inline ms-1">{{ s.photos.split(',')|length }}</span>
+              </button>
+              {# Редактировать фото для завершённых и рабочих #}
+              {% if s.status in ('done', 'rework') %}
+              <button type="button"
+                      class="btn btn-sm btn-outline-primary ms-1"
+                      title="Заменить фото"
+                      data-bs-toggle="modal" data-bs-target="#adminPhotosModal"
+                      data-stage-id="{{ s.id }}"
+                      data-stage-name="{{ s.stage_name | e }}">
+                <i class="bi bi-pencil"></i>
+              </button>
+              {% endif %}
+            {% elif s.status in ('done', 'rework') %}
+              {# Завершён/доработка без фото — дать добавить #}
+              <button type="button"
+                      class="btn btn-sm btn-outline-secondary"
+                      title="Добавить фото"
+                      data-bs-toggle="modal" data-bs-target="#adminPhotosModal"
+                      data-stage-id="{{ s.id }}"
+                      data-stage-name="{{ s.stage_name | e }}">
+                <i class="bi bi-camera-plus"></i>
+              </button>
+            {% else %}
+              <span class="text-muted small">—</span>
+            {% endif %}
+          </td>
 
-          {# ── Кнопки редакт. и удал. ── #}
+          {# Редактировать / На доработку / Удалить #}
           <td class="text-end text-nowrap p-1">
             <a href="{{ url_for('admin_stage_edit', stage_id=s.id) }}"
                class="btn btn-outline-primary btn-sm" title="Редактировать">
               <i class="bi bi-pencil"></i>
             </a>
-            <form method="post"
-                  action="{{ url_for('admin_stage_delete', stage_id=s.id) }}"
-                  class="d-inline"
+            {% if s.status == 'done' %}
+            <button type="button"
+                    class="btn btn-warning btn-sm ms-1"
+                    title="Вернуть на доработку"
+                    data-bs-toggle="modal" data-bs-target="#reworkModal"
+                    data-stage-id="{{ s.id }}"
+                    data-stage-name="{{ s.stage_name | e }}">
+              <i class="bi bi-arrow-counterclockwise"></i>
+            </button>
+            {% endif %}
+            <form method="post" action="{{ url_for('admin_stage_delete', stage_id=s.id) }}"
+                  class="d-inline ms-1"
                   onsubmit="return confirm('Удалить этап «{{ s.stage_name }}» из квартиры?')">
-              <button class="btn btn-outline-danger btn-sm" title="Удалить этап">
+              <button class="btn btn-outline-danger btn-sm" title="Удалить">
                 <i class="bi bi-trash"></i>
               </button>
             </form>
@@ -134,16 +201,14 @@
 {% endif %}
 
 
-{# ══ Модальное окно: добавить этап ══════════════════════════════ #}
+{# ══ Модалка: Добавить этап ════════════════════════════════════ #}
 {% if available %}
 <div class="modal fade" id="addStageModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <form method="post" action="{{ url_for('admin_stage_add', apt_id=apt.id) }}">
         <div class="modal-header">
-          <h5 class="modal-title">
-            <i class="bi bi-plus-circle me-2 text-success"></i>Добавить этап
-          </h5>
+          <h5 class="modal-title"><i class="bi bi-plus-circle me-2 text-success"></i>Добавить этап</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
@@ -163,31 +228,320 @@
             </div>
             <div class="col-6">
               <label class="form-label fw-semibold">Объём, кв.м</label>
-              <input type="number" step="0.01" min="0" name="volume_sqm"
-                     class="form-control" placeholder="0">
+              <input type="number" step="0.01" min="0" name="volume_sqm" class="form-control" placeholder="0">
             </div>
-          </div>
-          <div class="form-text mt-2">
-            Этап добавится в конец списка. Порядок можно изменить стрелками в таблице.
           </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
-          <button type="submit" class="btn btn-success">
-            <i class="bi bi-plus-lg me-1"></i>Добавить
-          </button>
+          <button type="submit" class="btn btn-success"><i class="bi bi-plus-lg me-1"></i>Добавить</button>
         </div>
       </form>
     </div>
   </div>
 </div>
 {% endif %}
+
+
+{# ══ Модалка: Загрузить/Заменить фото (Администратор) ═════════ #}
+<div class="modal fade" id="adminPhotosModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-camera-fill me-2 text-primary"></i>
+          Фото этапа: <span id="adminPhotoModalStageName" class="fw-bold"></span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="" id="adminPhotoForm" enctype="multipart/form-data">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              Фотографии <span class="text-danger">*</span>
+            </label>
+            <input type="file" name="photos" id="adminPhotoInput"
+                   class="form-control" multiple
+                   accept=".jpg,.jpeg,.png,.heic">
+            <div class="form-text">Можно загрузить до 30 фотографий. Форматы: JPG, PNG, HEIC.
+              <strong>Старые фото будут заменены.</strong>
+            </div>
+            <div id="adminPhotoCount" class="small text-muted mt-1 d-none">Загружено <span id="adminCountNum">0</span> из 30</div>
+          </div>
+          <div id="adminPhotoError" class="alert alert-warning py-2 small d-none"></div>
+          <div id="adminPreviewGrid" class="row g-2 mt-1"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+          <button type="submit" class="btn btn-primary" id="adminPhotoSubmit" disabled>
+            <span id="adminPhotoSpinner" class="spinner-border spinner-border-sm me-1 d-none" role="status"></span>
+            <span id="adminPhotoSubmitText"><i class="bi bi-cloud-upload me-1"></i>Сохранить фото</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+{# ══ Модалка: Просмотр фото ════════════════════════════════════ #}
+{# ══ Модалка: Вернуть на доработку ════════════════════════════ #}
+<div class="modal fade" id="reworkModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" action="" id="reworkForm">
+        <div class="modal-header bg-warning bg-opacity-10">
+          <h5 class="modal-title">
+            <i class="bi bi-arrow-counterclockwise me-2 text-warning"></i>
+            На доработку: <span id="reworkModalStageName" class="fw-bold"></span>
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-2">
+            <label class="form-label fw-semibold">
+              Причина возврата <span class="text-danger">*</span>
+            </label>
+            <textarea name="rework_reason" id="reworkReasonText"
+                      class="form-control" rows="4"
+                      placeholder="Опишите, что необходимо исправить или доделать..."
+                      minlength="10" required></textarea>
+            <div id="reworkHint" class="form-text text-danger d-none">
+              Укажите причину (минимум 10 символов).
+            </div>
+            <div class="form-text">
+              <span id="reworkCharCount">0</span> символов (минимум 10)
+            </div>
+          </div>
+          <div class="alert alert-warning py-2 small mb-0">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            Статус этапа изменится на «На доработку». Бригадир увидит причину и сможет возобновить работу.
+            Загруженные фото <strong>сохранятся</strong>.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+          <button type="submit" class="btn btn-warning" id="reworkSubmitBtn" disabled>
+            <i class="bi bi-arrow-counterclockwise me-1"></i>Вернуть на доработку
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+{# ══ Модалка: Просмотр фото ════════════════════════════════════ #}
+<div class="modal fade" id="photosModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-images me-2 text-primary"></i>
+          Фото: <span id="photosModalStageName" class="fw-bold"></span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="photosGrid" class="row g-2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
+
 {% block scripts %}
+<style>
+  .photo-thumb-wrap {
+    position: relative; aspect-ratio: 1;
+    overflow: hidden; border-radius: 8px; background: #f1f3f5;
+  }
+  .photo-thumb-wrap img { width:100%; height:100%; object-fit:cover; display:block; }
+  .photo-thumb-wrap .remove-photo {
+    position:absolute; top:4px; right:4px;
+    background:rgba(0,0,0,.55); color:#fff;
+    border:none; border-radius:50%;
+    width:22px; height:22px; font-size:12px; line-height:1;
+    cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;
+  }
+  .gallery-img {
+    width:100%; aspect-ratio:1; object-fit:cover;
+    border-radius:8px; cursor:zoom-in; transition:opacity .15s;
+  }
+  .gallery-img:hover { opacity:.85; }
+</style>
+
 <script>
-  document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+  // Tooltips
+  document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el =>
     new bootstrap.Tooltip(el, { trigger: 'hover' })
+  )
+
+  // ── Общая функция управления загрузкой фото ────────────────────
+  const MAX_PHOTOS = 30
+
+  function makePhotoManager({ inputId, gridId, errorId, submitId, formId, countId, countNumId, spinnerId, submitTextId }) {
+    const input      = document.getElementById(inputId)
+    const grid       = document.getElementById(gridId)
+    const error      = document.getElementById(errorId)
+    const submit     = document.getElementById(submitId)
+    const form       = document.getElementById(formId)
+    const countWrap  = countId     ? document.getElementById(countId)     : null
+    const countNum   = countNumId  ? document.getElementById(countNumId)  : null
+    const spinner    = spinnerId   ? document.getElementById(spinnerId)   : null
+    const submitText = submitTextId? document.getElementById(submitTextId): null
+    const allowed    = ['jpg','jpeg','png','heic']
+    let files = []
+
+    function reset() {
+      files = []; input.value = ''
+      grid.innerHTML = ''; submit.disabled = true
+      error.classList.add('d-none')
+      if (countWrap) countWrap.classList.add('d-none')
+      if (spinner)   spinner.classList.add('d-none')
+    }
+
+    function showError(msg) {
+      error.textContent = msg; error.classList.remove('d-none')
+    }
+
+    function render() {
+      grid.innerHTML = ''
+      files.forEach((f, i) => {
+        const col = document.createElement('div')
+        col.className = 'col-4 col-sm-3 col-md-2'
+        col.innerHTML = `<div class="photo-thumb-wrap">
+          <img src="${URL.createObjectURL(f)}" alt="">
+          <button class="remove-photo" type="button" data-i="${i}" title="Удалить">
+            <i class="bi bi-x"></i></button></div>`
+        grid.appendChild(col)
+      })
+      grid.querySelectorAll('.remove-photo').forEach(btn =>
+        btn.addEventListener('click', () => {
+          files.splice(+btn.dataset.i, 1); render(); validate()
+        })
+      )
+      if (countWrap && countNum) {
+        if (files.length > 0) { countNum.textContent = files.length; countWrap.classList.remove('d-none') }
+        else countWrap.classList.add('d-none')
+      }
+    }
+
+    function validate() {
+      if (!files.length) { showError('Прикрепите минимум 1 фотографию.'); submit.disabled = true }
+      else { error.classList.add('d-none'); submit.disabled = false }
+    }
+
+    input.addEventListener('change', function() {
+      const newFiles = Array.from(this.files)
+      for (const f of newFiles) {
+        const ext = f.name.split('.').pop().toLowerCase()
+        if (!allowed.includes(ext)) {
+          showError(`Недопустимый формат: ${f.name}. Допустимо: JPG, PNG, HEIC.`)
+          this.value = ''; return
+        }
+        if (files.length >= MAX_PHOTOS) {
+          showError(`Максимум ${MAX_PHOTOS} фотографий.`)
+          this.value = ''; return
+        }
+        files.push(f)
+      }
+      this.value = ''; render(); validate()
+    })
+
+    form.addEventListener('submit', function(e) {
+      if (!files.length) { e.preventDefault(); showError('Прикрепите минимум 1 фотографию.'); return }
+      const dt = new DataTransfer()
+      files.forEach(f => dt.items.add(f))
+      input.files = dt.files
+      // Спиннер
+      submit.disabled = true
+      if (spinner)    spinner.classList.remove('d-none')
+      if (submitText) submitText.textContent = 'Загрузка...'
+    })
+
+    return { reset, setAction: url => form.action = url }
+  }
+
+  // Менеджер фото для Администратора
+  const adminMgr = makePhotoManager({
+    inputId:      'adminPhotoInput',
+    gridId:       'adminPreviewGrid',
+    errorId:      'adminPhotoError',
+    submitId:     'adminPhotoSubmit',
+    formId:       'adminPhotoForm',
+    countId:      'adminPhotoCount',
+    countNumId:   'adminCountNum',
+    spinnerId:    'adminPhotoSpinner',
+    submitTextId: 'adminPhotoSubmitText',
   })
+
+  const adminPhotosModal = document.getElementById('adminPhotosModal')
+  if (adminPhotosModal) {
+    adminPhotosModal.addEventListener('show.bs.modal', e => {
+      const b = e.relatedTarget
+      document.getElementById('adminPhotoModalStageName').textContent = b.dataset.stageName
+      adminMgr.setAction(`/admin/stages/${b.dataset.stageId}/photos`)
+      adminMgr.reset()
+    })
+    adminPhotosModal.addEventListener('hidden.bs.modal', () => adminMgr.reset())
+  }
+
+  // ── Модалка «На доработку» ─────────────────────────────────────
+  const reworkModal  = document.getElementById('reworkModal')
+  const reworkForm   = document.getElementById('reworkForm')
+  const reworkText   = document.getElementById('reworkReasonText')
+  const reworkSubmit = document.getElementById('reworkSubmitBtn')
+  const reworkHint   = document.getElementById('reworkHint')
+  const reworkCount  = document.getElementById('reworkCharCount')
+
+  if (reworkModal) {
+    reworkModal.addEventListener('show.bs.modal', e => {
+      const b = e.relatedTarget
+      document.getElementById('reworkModalStageName').textContent = b.dataset.stageName
+      reworkForm.action = `/admin/stages/${b.dataset.stageId}/rework`
+      reworkText.value = ''
+      reworkSubmit.disabled = true
+      reworkHint.classList.add('d-none')
+      reworkCount.textContent = '0'
+    })
+    reworkModal.addEventListener('hidden.bs.modal', () => {
+      reworkText.value = ''
+      reworkCount.textContent = '0'
+    })
+  }
+
+  reworkText && reworkText.addEventListener('input', function() {
+    const len = this.value.trim().length
+    reworkCount.textContent = len
+    if (len < 10) {
+      reworkSubmit.disabled = true
+      reworkHint.classList.remove('d-none')
+    } else {
+      reworkSubmit.disabled = false
+      reworkHint.classList.add('d-none')
+    }
+  })
+
+  // ── Просмотр фото ──────────────────────────────────────────────
+  const photosModal = document.getElementById('photosModal')
+  if (photosModal) {
+    photosModal.addEventListener('show.bs.modal', e => {
+      const b = e.relatedTarget
+      document.getElementById('photosModalStageName').textContent = b.dataset.stageName
+      const aptId = b.dataset.aptId, stageId = b.dataset.stageId
+      const photos = b.dataset.photos ? b.dataset.photos.split(',') : []
+      const g = document.getElementById('photosGrid'); g.innerHTML = ''
+      photos.forEach(name => {
+        const col = document.createElement('div')
+        col.className = 'col-6 col-sm-4 col-md-3'
+        const url = `/static/uploads/${aptId}/${stageId}/${name}`
+        col.innerHTML = `<a href="${url}" target="_blank"><img src="${url}" class="gallery-img" alt="${name}"></a>`
+        g.appendChild(col)
+      })
+    })
+  }
 </script>
 {% endblock %}

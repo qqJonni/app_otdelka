@@ -19,7 +19,11 @@ app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-prod')
 
 AVATAR_FOLDER = os.path.join(app.root_path, 'static', 'avatars')
 ALLOWED_AVATAR_EXT = {'jpg', 'jpeg', 'png'}
-MAX_AVATAR_SIZE = 2 * 1024 * 1024  # 2 МБ
+# Ограничение на размер аватара убрано — принимаем файлы любого размера
+
+UPLOAD_FOLDER = os.path.join(app.root_path, 'static', 'uploads')
+ALLOWED_PHOTO_EXT = {'jpg', 'jpeg', 'png', 'heic'}
+MAX_PHOTOS_PER_STAGE = 30  # максимум фото на один этап
 
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
@@ -99,10 +103,18 @@ def run_migrations(db):
     if 'work_description' not in cols:
         db.execute("ALTER TABLE apartment_stages ADD COLUMN work_description TEXT")
 
-    # users.avatar
+    # users: avatar, is_approved, created_at
     cols = [r[1] for r in db.execute("PRAGMA table_info(users)").fetchall()]
     if 'avatar' not in cols:
         db.execute("ALTER TABLE users ADD COLUMN avatar TEXT")
+    if 'is_approved' not in cols:
+        db.execute("ALTER TABLE users ADD COLUMN is_approved INTEGER NOT NULL DEFAULT 0")
+        # Существующие пользователи уже в системе — подтверждаем всех
+        db.execute("UPDATE users SET is_approved=1")
+    if 'created_at' not in cols:
+        # SQLite не поддерживает datetime() как DEFAULT в ALTER TABLE
+        db.execute("ALTER TABLE users ADD COLUMN created_at TEXT")
+        db.execute("UPDATE users SET created_at=datetime('now') WHERE created_at IS NULL")
 
     # apartments.created_at
     cols = [r[1] for r in db.execute("PRAGMA table_info(apartments)").fetchall()]
@@ -118,10 +130,62 @@ def run_migrations(db):
         value TEXT NOT NULL
     )''')
 
+    # apartment_stages: добавляем photos если нет (старая миграция)
+    cols = [r[1] for r in db.execute("PRAGMA table_info(apartment_stages)").fetchall()]
+    if 'photos' not in cols:
+        db.execute("ALTER TABLE apartment_stages ADD COLUMN photos TEXT")
+        db.commit()
+        cols.append('photos')
+
+    # apartment_stages: пересоздаём таблицу для поддержки 'rework' + новые поля
+    # (ALTER TABLE не может изменить CHECK constraint в SQLite)
+    if 'rework_reason' not in cols:
+        db.executescript('''
+            PRAGMA foreign_keys=OFF;
+
+            CREATE TABLE apartment_stages_v2 (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                apartment_id INTEGER NOT NULL REFERENCES apartments(id) ON DELETE CASCADE,
+                stage_name TEXT NOT NULL,
+                order_num INTEGER NOT NULL DEFAULT 0,
+                volume_sqm REAL,
+                deadline TEXT,
+                status TEXT NOT NULL DEFAULT 'not_started'
+                    CHECK(status IN ('not_started','in_progress','done','overdue','rework')),
+                started_at TEXT,
+                completed_at TEXT,
+                work_description TEXT,
+                photos TEXT,
+                rework_reason TEXT,
+                rework_count INTEGER NOT NULL DEFAULT 0
+            );
+
+            INSERT INTO apartment_stages_v2
+                (id, apartment_id, stage_name, order_num, volume_sqm, deadline,
+                 status, started_at, completed_at, work_description, photos,
+                 rework_reason, rework_count)
+            SELECT
+                id, apartment_id, stage_name, order_num, volume_sqm, deadline,
+                status, started_at, completed_at, work_description, photos,
+                NULL, 0
+            FROM apartment_stages;
+
+            DROP TABLE apartment_stages;
+            ALTER TABLE apartment_stages_v2 RENAME TO apartment_stages;
+
+            PRAGMA foreign_keys=ON;
+        ''')
+
+    # apartments.completed_at
+    cols = [r[1] for r in db.execute("PRAGMA table_info(apartments)").fetchall()]
+    if 'completed_at' not in cols:
+        db.execute("ALTER TABLE apartments ADD COLUMN completed_at TEXT")
+
     db.commit()
 
-    # Создать папку для аватаров
+    # Создать папки для файлов
     os.makedirs(AVATAR_FOLDER, exist_ok=True)
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
 def init_db():
@@ -135,7 +199,10 @@ def init_db():
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             role TEXT NOT NULL CHECK(role IN ('admin','foreman','guest')),
-            full_name TEXT NOT NULL DEFAULT ''
+            full_name TEXT NOT NULL DEFAULT '',
+            avatar TEXT,
+            is_approved INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now'))
         );
 
         CREATE TABLE IF NOT EXISTS buildings (
@@ -151,7 +218,8 @@ def init_db():
             plan_start_date TEXT,
             plan_end_date TEXT,
             foreman_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-            created_at TEXT DEFAULT (datetime('now'))
+            created_at TEXT DEFAULT (datetime('now')),
+            completed_at TEXT
         );
 
         CREATE TABLE IF NOT EXISTS stages_template (
@@ -169,10 +237,13 @@ def init_db():
             volume_sqm REAL,
             deadline TEXT,
             status TEXT NOT NULL DEFAULT 'not_started'
-                CHECK(status IN ('not_started','in_progress','done','overdue')),
+                CHECK(status IN ('not_started','in_progress','done','overdue','rework')),
             started_at TEXT,
             completed_at TEXT,
-            work_description TEXT
+            work_description TEXT,
+            photos TEXT,
+            rework_reason TEXT,
+            rework_count INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS guest_tokens (
@@ -199,14 +270,14 @@ def init_db():
         db.close()
         return
 
-    # Users
+    # Users (все seed-пользователи сразу подтверждены)
     users = [
-        ('admin', generate_password_hash('admin123'), 'admin', 'Администратор'),
-        ('foreman1', generate_password_hash('123456'), 'foreman', 'Иванов Иван'),
-        ('foreman2', generate_password_hash('123456'), 'foreman', 'Петров Пётр'),
+        ('admin',    generate_password_hash('admin123'), 'admin',   'Администратор', 1),
+        ('foreman1', generate_password_hash('123456'),   'foreman', 'Иванов Иван',   1),
+        ('foreman2', generate_password_hash('123456'),   'foreman', 'Петров Пётр',   1),
     ]
     db.executemany(
-        'INSERT INTO users (username,password_hash,role,full_name) VALUES (?,?,?,?)',
+        'INSERT INTO users (username,password_hash,role,full_name,is_approved) VALUES (?,?,?,?,?)',
         users
     )
 
@@ -279,7 +350,8 @@ class User(UserMixin):
         self.username = row['username']
         self.role = row['role']
         self.full_name = row['full_name']
-        self.avatar = row['avatar'] if 'avatar' in row.keys() else None
+        self.avatar      = row['avatar']      if 'avatar'      in row.keys() else None
+        self.is_approved = row['is_approved'] if 'is_approved' in row.keys() else 1
 
     @property
     def initials(self):
@@ -288,6 +360,18 @@ class User(UserMixin):
         if len(parts) >= 2:
             return (parts[0][0] + parts[1][0]).upper()
         return name[:2].upper() if len(name) >= 2 else name[:1].upper()
+
+
+@app.context_processor
+def inject_pending_count():
+    """Передаёт pending_count во все шаблоны (для бейджа в меню)."""
+    try:
+        if current_user.is_authenticated and current_user.role == 'admin':
+            c = query_db('SELECT COUNT(*) as c FROM users WHERE is_approved=0', one=True)
+            return {'pending_count': c['c'] if c else 0}
+    except Exception:
+        pass
+    return {'pending_count': 0}
 
 
 @login_manager.user_loader
@@ -316,6 +400,50 @@ def foreman_required(f):
     return decorated
 
 
+def save_stage_photos(stage_id, apt_id, files):
+    """Сохранить фото этапа, удалив старые. Вернуть строку имён через запятую."""
+    import shutil
+    stage_dir = os.path.join(UPLOAD_FOLDER, str(apt_id), str(stage_id))
+    if os.path.exists(stage_dir):
+        shutil.rmtree(stage_dir)
+    os.makedirs(stage_dir, exist_ok=True)
+    filenames = []
+    for i, f in enumerate(files, 1):
+        ext = f.filename.rsplit('.', 1)[-1].lower() if '.' in f.filename else 'jpg'
+        filename = f'photo_{i}.{ext}'
+        f.save(os.path.join(stage_dir, filename))
+        filenames.append(filename)
+    return ','.join(filenames)
+
+
+def validate_photos(files):
+    """Проверить список файлов. Вернуть (ok: bool, error: str | None)."""
+    valid = [f for f in files if f and f.filename]
+    if not valid:
+        return False, 'Прикрепите минимум 1 фотографию.'
+    if len(valid) > MAX_PHOTOS_PER_STAGE:
+        return False, f'Максимум {MAX_PHOTOS_PER_STAGE} фотографий.'
+    for f in valid:
+        ext = f.filename.rsplit('.', 1)[-1].lower() if '.' in f.filename else ''
+        if ext not in ALLOWED_PHOTO_EXT:
+            return False, f'Недопустимый формат: {f.filename}. Допустимо: JPG, PNG, HEIC.'
+    return True, None
+
+
+def check_apartment_completion(apt_id):
+    """Обновить completed_at квартиры: заполнить если все этапы done, очистить иначе."""
+    stages = query_db(
+        'SELECT status FROM apartment_stages WHERE apartment_id=?', [apt_id]
+    )
+    if stages and all(s['status'] == 'done' for s in stages):
+        execute_db(
+            "UPDATE apartments SET completed_at=datetime('now') WHERE id=? AND completed_at IS NULL",
+            [apt_id]
+        )
+    else:
+        execute_db("UPDATE apartments SET completed_at=NULL WHERE id=?", [apt_id])
+
+
 def refresh_overdue():
     """Mark stages as overdue only when deadline is set and passed and not done."""
     today = str(date.today())
@@ -336,10 +464,11 @@ def refresh_overdue():
 
 
 STATUS_LABEL = {
-    'not_started': ('Не начат', 'secondary'),
-    'in_progress': ('В работе', 'warning'),
-    'done': ('Завершён', 'success'),
-    'overdue': ('Просрочен', 'danger'),
+    'not_started': ('Не начат',     'secondary'),
+    'in_progress': ('В работе',     'warning'),
+    'done':        ('Завершён',     'success'),
+    'overdue':     ('Просрочен',    'danger'),
+    'rework':      ('На доработку', 'warning'),   # текст-dark добавляется в шаблоне
 }
 
 app.jinja_env.globals['STATUS_LABEL'] = STATUS_LABEL
@@ -358,6 +487,10 @@ def login():
         password = request.form.get('password', '').strip()
         row = query_db('SELECT * FROM users WHERE username=?', [username], one=True)
         if row and check_password_hash(row['password_hash'], password):
+            if not row['is_approved']:
+                flash('Ваша учётная запись ещё не подтверждена администратором. '
+                      'Пожалуйста, ожидайте.', 'warning')
+                return render_template('login.html')
             user = User(row)
             login_user(user)
             return _redirect_by_role(user.role)
@@ -372,6 +505,49 @@ def _redirect_by_role(role):
     if role == 'foreman':
         return redirect(url_for('foreman_dashboard'))
     return redirect(url_for('login'))
+
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return _redirect_by_role(current_user.role)
+
+    error = {}
+    form  = {}
+
+    if request.method == 'POST':
+        form['username']  = request.form.get('username', '').strip()
+        form['password']  = request.form.get('password', '')
+        form['password2'] = request.form.get('password2', '')
+        form['role']      = request.form.get('role', 'foreman')
+        form['full_name'] = request.form.get('full_name', '').strip()
+
+        if len(form['username']) < 3:
+            error['username'] = 'Логин должен содержать минимум 3 символа.'
+        elif query_db('SELECT id FROM users WHERE username=?', [form['username']], one=True):
+            error['username'] = 'Пользователь с таким логином уже существует.'
+
+        if len(form['password']) < 4:
+            error['password'] = 'Пароль должен содержать минимум 4 символа.'
+        elif form['password'] != form['password2']:
+            error['password2'] = 'Пароли не совпадают.'
+
+        if form['role'] not in ('foreman', 'guest'):
+            error['role'] = 'Недопустимая роль.'
+
+        if not error:
+            execute_db(
+                '''INSERT INTO users
+                   (username, password_hash, role, full_name, is_approved, created_at)
+                   VALUES (?,?,?,?,0,datetime('now'))''',
+                [form['username'], generate_password_hash(form['password']),
+                 form['role'], form['full_name']]
+            )
+            flash('Регистрация прошла успешно. Ожидайте подтверждения администратора. '
+                  'После подтверждения вы сможете войти.', 'success')
+            return redirect(url_for('login'))
+
+    return render_template('register.html', error=error, form=form)
 
 
 @app.route('/logout')
@@ -421,11 +597,7 @@ def admin_dashboard():
         one=True
     )['c']
     done_apts = query_db(
-        """SELECT COUNT(*) as c FROM apartments a
-           WHERE NOT EXISTS (
-               SELECT 1 FROM apartment_stages s
-               WHERE s.apartment_id=a.id AND s.status != 'done'
-           ) AND EXISTS (SELECT 1 FROM apartment_stages s WHERE s.apartment_id=a.id)""",
+        "SELECT COUNT(*) as c FROM apartments WHERE completed_at IS NOT NULL",
         one=True
     )['c']
     overdue = query_db(
@@ -661,6 +833,8 @@ def admin_stage_add(apt_id):
                VALUES (?,?,?,?,?,?,?)''',
             [apt_id, stage_name, max_ord + 1, volume, deadline, 'not_started', work_desc]
         )
+        # Новый этап — квартира больше не завершена
+        check_apartment_completion(apt_id)
         flash(f'Этап «{stage_name}» добавлен в квартиру.', 'success')
     return redirect(url_for('admin_stages', apt_id=apt_id))
 
@@ -675,6 +849,7 @@ def admin_stage_delete(stage_id):
         abort(404)
     apt_id = stage['apartment_id']
     execute_db('DELETE FROM apartment_stages WHERE id=?', [stage_id])
+    check_apartment_completion(apt_id)
     flash(f'Этап «{stage["stage_name"]}» удалён из квартиры.', 'success')
     return redirect(url_for('admin_stages', apt_id=apt_id))
 
@@ -806,10 +981,6 @@ def profile_avatar():
         return redirect(url_for('profile'))
 
     data = f.read()
-    if len(data) > MAX_AVATAR_SIZE:
-        flash('Файл слишком большой (максимум 2 МБ).', 'danger')
-        return redirect(url_for('profile'))
-
     os.makedirs(AVATAR_FOLDER, exist_ok=True)
 
     # Удаляем старый аватар (любое расширение)
@@ -997,7 +1168,9 @@ def admin_user_add():
         if username and password and role:
             try:
                 execute_db(
-                    'INSERT INTO users (username,password_hash,role,full_name) VALUES (?,?,?,?)',
+                    '''INSERT INTO users
+                       (username,password_hash,role,full_name,is_approved,created_at)
+                       VALUES (?,?,?,?,1,datetime('now'))''',
                     [username, generate_password_hash(password), role, full_name]
                 )
                 flash('Пользователь создан.', 'success')
@@ -1017,6 +1190,38 @@ def admin_user_delete(uid):
         execute_db('DELETE FROM users WHERE id=?', [uid])
         flash('Пользователь удалён.', 'success')
     return redirect(url_for('admin_users'))
+
+
+@app.route('/admin/pending')
+@login_required
+@admin_required
+def admin_pending():
+    pending = query_db(
+        "SELECT * FROM users WHERE is_approved=0 ORDER BY created_at DESC"
+    )
+    return render_template('admin/pending.html', pending=pending)
+
+
+@app.route('/admin/pending/<int:uid>/approve', methods=['POST'])
+@login_required
+@admin_required
+def admin_pending_approve(uid):
+    row = query_db('SELECT username FROM users WHERE id=? AND is_approved=0', [uid], one=True)
+    if row:
+        execute_db('UPDATE users SET is_approved=1 WHERE id=?', [uid])
+        flash(f'Пользователь «{row["username"]}» подтверждён.', 'success')
+    return redirect(url_for('admin_pending'))
+
+
+@app.route('/admin/pending/<int:uid>/reject', methods=['POST'])
+@login_required
+@admin_required
+def admin_pending_reject(uid):
+    row = query_db('SELECT username FROM users WHERE id=? AND is_approved=0', [uid], one=True)
+    if row:
+        execute_db('DELETE FROM users WHERE id=?', [uid])
+        flash(f'Пользователь «{row["username"]}» отклонён и удалён.', 'warning')
+    return redirect(url_for('admin_pending'))
 
 
 # ─── Foreman routes ───────────────────────────────────────────────────────────
@@ -1046,7 +1251,9 @@ def foreman_dashboard():
         )
         total = len(stages)
         done  = sum(1 for s in stages if s['status'] == 'done')
-        active = any(s['status'] in ('in_progress', 'overdue') for s in stages)
+        # «В работе»: есть этапы в статусе in_progress, overdue или rework, квартира не завершена
+        active = (not apt['completed_at'] and
+                  any(s['status'] in ('in_progress', 'overdue', 'rework') for s in stages))
         pct   = int(done / total * 100) if total else 0
         apt_data.append({
             'apt':    apt,
@@ -1057,11 +1264,13 @@ def foreman_dashboard():
             'pct':    pct,
         })
 
-    # Сводная статистика
+    # Сводная статистика — только по квартирам этого бригадира
     stats = {
         'total':       len(apt_data),
-        'in_progress': sum(1 for d in apt_data if d['active'] and d['done'] < d['total']),
-        'completed':   sum(1 for d in apt_data if d['total'] > 0 and d['done'] == d['total']),
+        # «В работе»: незавершённые квартиры с активными этапами
+        'in_progress': sum(1 for d in apt_data if d['active']),
+        # «Завершено»: квартиры с completed_at из БД
+        'completed':   sum(1 for d in apt_data if d['apt']['completed_at']),
     }
 
     return render_template('foreman/dashboard.html', apt_data=apt_data, stats=stats)
@@ -1079,17 +1288,99 @@ def foreman_stage_action(stage_id):
         abort(403)
 
     now = datetime.now().isoformat()
-    if stage['status'] == 'not_started':
+    if stage['status'] in ('not_started', 'overdue'):
+        # «Начать»
         execute_db(
             "UPDATE apartment_stages SET status='in_progress', started_at=? WHERE id=?",
             [now, stage_id]
         )
-    elif stage['status'] in ('in_progress', 'overdue'):
+    elif stage['status'] == 'rework':
+        # «Возобновить» — очищаем причину, возвращаем в работу
         execute_db(
-            "UPDATE apartment_stages SET status='done', completed_at=? WHERE id=?",
-            [now, stage_id]
+            "UPDATE apartment_stages SET status='in_progress', rework_reason=NULL WHERE id=?",
+            [stage_id]
         )
+    # in_progress → done — через foreman_stage_finish (с фото)
     return redirect(url_for('foreman_dashboard'))
+
+
+@app.route('/foreman/stages/<int:stage_id>/finish', methods=['POST'])
+@login_required
+@foreman_required
+def foreman_stage_finish(stage_id):
+    """Завершить этап с загрузкой фотографий."""
+    stage = query_db('SELECT * FROM apartment_stages WHERE id=?', [stage_id], one=True)
+    if not stage:
+        abort(404)
+    apt = query_db('SELECT * FROM apartments WHERE id=?', [stage['apartment_id']], one=True)
+    if current_user.role != 'admin' and apt['foreman_id'] != current_user.id:
+        abort(403)
+
+    files = [f for f in request.files.getlist('photos') if f and f.filename]
+    ok, err = validate_photos(files)
+    if not ok:
+        flash(err, 'danger')
+        return redirect(url_for('foreman_dashboard'))
+
+    photos_str = save_stage_photos(stage_id, apt['id'], files)
+    now = datetime.now().isoformat()
+    execute_db(
+        "UPDATE apartment_stages SET status='done', completed_at=?, photos=? WHERE id=?",
+        [now, photos_str, stage_id]
+    )
+    check_apartment_completion(apt['id'])
+    flash(f'Этап «{stage["stage_name"]}» завершён, загружено фото: {len(files)}.', 'success')
+    return redirect(url_for('foreman_dashboard'))
+
+
+@app.route('/admin/stages/<int:stage_id>/photos', methods=['POST'])
+@login_required
+@admin_required
+def admin_stage_photos(stage_id):
+    """Обновить фотографии завершённого этапа (администратор)."""
+    stage = query_db('SELECT * FROM apartment_stages WHERE id=?', [stage_id], one=True)
+    if not stage:
+        abort(404)
+    apt = query_db('SELECT * FROM apartments WHERE id=?', [stage['apartment_id']], one=True)
+
+    files = [f for f in request.files.getlist('photos') if f and f.filename]
+    ok, err = validate_photos(files)
+    if not ok:
+        flash(err, 'danger')
+        return redirect(url_for('admin_stages', apt_id=stage['apartment_id']))
+
+    photos_str = save_stage_photos(stage_id, apt['id'], files)
+    execute_db('UPDATE apartment_stages SET photos=? WHERE id=?', [photos_str, stage_id])
+    flash(f'Фотографии обновлены ({len(files)} шт.).', 'success')
+    return redirect(url_for('admin_stages', apt_id=stage['apartment_id']))
+
+
+@app.route('/admin/stages/<int:stage_id>/rework', methods=['POST'])
+@login_required
+@admin_required
+def admin_stage_rework(stage_id):
+    """Вернуть завершённый этап на доработку с указанием причины."""
+    stage = query_db('SELECT * FROM apartment_stages WHERE id=?', [stage_id], one=True)
+    if not stage or stage['status'] != 'done':
+        flash('Возврат на доработку доступен только для завершённых этапов.', 'danger')
+        return redirect(url_for('admin_stages', apt_id=stage['apartment_id']) if stage else url_for('admin_dashboard'))
+
+    reason = request.form.get('rework_reason', '').strip()
+    if len(reason) < 10:
+        flash('Укажите причину возврата (минимум 10 символов).', 'danger')
+        return redirect(url_for('admin_stages', apt_id=stage['apartment_id']))
+
+    rework_count = (stage['rework_count'] or 0) + 1
+    execute_db(
+        '''UPDATE apartment_stages
+           SET status='rework', completed_at=NULL, rework_reason=?, rework_count=?
+           WHERE id=?''',
+        [reason, rework_count, stage_id]
+    )
+    # Квартира больше не завершена
+    check_apartment_completion(stage['apartment_id'])
+    flash(f'Этап «{stage["stage_name"]}» возвращён на доработку.', 'warning')
+    return redirect(url_for('admin_stages', apt_id=stage['apartment_id']))
 
 
 # ─── Error handlers ───────────────────────────────────────────────────────────

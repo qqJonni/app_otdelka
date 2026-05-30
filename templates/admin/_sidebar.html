@@ -45,6 +45,15 @@
         <i class="bi bi-file-earmark-excel"></i> Экспорт Excel
       </a>
     </li>
+    <li class="nav-item">
+      <a class="nav-link {% if request.endpoint in ['admin_pending','admin_pending_approve','admin_pending_reject'] %}active{% endif %} d-flex align-items-center justify-content-between"
+         href="{{ url_for('admin_pending') }}">
+        <span><i class="bi bi-person-check"></i> Подтверждение</span>
+        {% if pending_count > 0 %}
+        <span class="badge bg-danger rounded-pill">{{ pending_count }}</span>
+        {% endif %}
+      </a>
+    </li>
   </ul>
 
   {# ── Профиль в нижней части боковой панели ── #}

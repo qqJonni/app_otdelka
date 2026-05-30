@@ -164,6 +164,16 @@
               <i class="bi bi-file-earmark-excel me-1"></i>Экспорт Excel
             </a>
           </li>
+          <li class="nav-item">
+            <a class="nav-link d-flex align-items-center justify-content-between
+                       {% if request.endpoint in ['admin_pending','admin_pending_approve','admin_pending_reject'] %}active fw-semibold{% endif %}"
+               href="{{ url_for('admin_pending') }}">
+              <span><i class="bi bi-person-check me-1"></i>Подтверждение</span>
+              {% if pending_count > 0 %}
+              <span class="badge bg-danger rounded-pill ms-1">{{ pending_count }}</span>
+              {% endif %}
+            </a>
+          </li>
         {% elif current_user.role == 'foreman' %}
           <li class="nav-item">
             <a class="nav-link {% if request.endpoint == 'foreman_dashboard' %}active fw-semibold{% endif %}"

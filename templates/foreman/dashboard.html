@@ -30,7 +30,6 @@
 
 {% block content %}
 
-{# ── Заголовок ── #}
 <div class="d-flex align-items-baseline gap-2 mb-3">
   <h4 class="fw-bold mb-0"><i class="bi bi-house-door me-2"></i>Мои квартиры</h4>
   <span class="text-muted small d-none d-sm-inline">{{ current_user.full_name }}</span>
@@ -62,10 +61,10 @@
   {% set apt    = item.apt %}
   {% set stages = item.stages %}
   {% set colId  = 'apt-collapse-' ~ apt.id %}
+  {% set is_completed = apt.completed_at %}
 
-  <div class="apt-card mb-3">
+  <div class="apt-card mb-3 {% if is_completed %}apt-card--done{% endif %}">
 
-    {# ── Заголовок карточки (кнопка-аккордеон) ── #}
     <button class="apt-card__header w-100 text-start border-0 bg-white collapsed"
             type="button"
             data-bs-toggle="collapse"
@@ -74,36 +73,46 @@
             aria-controls="{{ colId }}">
 
       <div class="d-flex align-items-center gap-3">
-
-        {# Номер + ЖК #}
         <div class="flex-grow-1 min-w-0">
-          <div class="fw-bold fs-5 lh-1 mb-1">Кв. {{ apt.number }}</div>
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="fw-bold fs-5 lh-1">Кв. {{ apt.number }}</span>
+            {% if is_completed %}
+            <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Выполнена</span>
+            {% endif %}
+          </div>
           <div class="text-muted small">
             {{ apt.building_name }}
             {% if apt.building_address %}&nbsp;·&nbsp;{{ apt.building_address }}{% endif %}
           </div>
-
-          {# Прогресс-бар #}
           <div class="d-flex align-items-center gap-2 mt-2">
             <div class="progress flex-grow-1" style="height:6px">
               <div class="progress-bar bg-success" style="width:{{ item.pct }}%"></div>
             </div>
-            <span class="text-muted small text-nowrap" style="min-width:60px">
-              {{ item.done }} из {{ item.total }}
+            <span class="text-muted small text-nowrap" style="min-width:72px">
+              {% if is_completed %}
+                Выполнена
+              {% else %}
+                {{ item.done }} из {{ item.total }}
+              {% endif %}
             </span>
           </div>
         </div>
-
-        {# Стрелка раскрытия #}
         <div class="apt-card__arrow text-muted flex-shrink-0">
           <i class="bi bi-chevron-down fs-5"></i>
         </div>
       </div>
     </button>
 
-    {# ── Раскрывающаяся часть с этапами ── #}
     <div id="{{ colId }}" class="collapse" data-bs-parent="#aptAccordion">
       <div class="apt-card__body">
+        {# Алерт: этапы на доработку #}
+        {% set rework_stages = stages | selectattr('status', 'equalto', 'rework') | list %}
+        {% if rework_stages %}
+        <div class="alert alert-warning py-2 px-3 mb-0 rounded-0 border-0 border-bottom">
+          <i class="bi bi-exclamation-triangle-fill me-1"></i>
+          <strong>Внимание:</strong> есть этапы, требующие доработки ({{ rework_stages | length }} шт.)
+        </div>
+        {% endif %}
         {% if stages %}
         <div class="table-responsive">
           <table class="table table-hover mb-0 align-middle">
@@ -118,25 +127,40 @@
             <tbody>
               {% for s in stages %}
               {% set lbl = STATUS_LABEL[s.status] %}
-              <tr>
-
-                {# Название + кнопка «Состав работ» #}
+              {% set today_str = now().strftime('%Y-%m-%d') %}
+              {# Визуальная просрочка rework #}
+              {% set rework_overdue = (s.status == 'rework' and s.deadline and s.deadline < today_str) %}
+              <tr class="{% if s.status == 'rework' and not rework_overdue %}table-warning{% endif %}">
                 <td>
-                  <span class="{% if s.status == 'overdue' %}text-danger fw-semibold{% endif %}">
+                  {# Иконка предупреждения для rework #}
+                  {% if s.status == 'rework' %}
+                  <i class="bi bi-exclamation-triangle-fill text-warning me-1" title="Требует доработки"></i>
+                  {% endif %}
+                  <span class="{% if s.status == 'overdue' or rework_overdue %}text-danger fw-semibold{% endif %}">
                     {{ s.stage_name }}
                   </span>
+                  {# Кнопки для info #}
                   {% if s.work_description and s.work_description.strip() %}
                   <button type="button"
                           class="btn btn-link btn-sm p-0 ms-1 text-muted align-baseline"
-                          data-bs-toggle="modal"
-                          data-bs-target="#workModal"
+                          data-bs-toggle="modal" data-bs-target="#workModal"
                           data-stage-name="{{ s.stage_name }}"
                           data-work-desc="{{ s.work_description | e }}"
                           title="Состав работ">
                     <i class="bi bi-info-circle-fill"></i>
                   </button>
                   {% endif %}
-                  {# Дедлайн под названием на xs #}
+                  {# Кнопка «Причина» для rework #}
+                  {% if s.status == 'rework' and s.rework_reason %}
+                  <button type="button"
+                          class="btn btn-link btn-sm p-0 ms-1 text-warning align-baseline"
+                          data-bs-toggle="modal" data-bs-target="#reworkReasonModal"
+                          data-stage-name="{{ s.stage_name | e }}"
+                          data-reason="{{ s.rework_reason | e }}"
+                          title="Причина возврата">
+                    <i class="bi bi-chat-square-text-fill"></i> <span class="d-none d-sm-inline small">Причина</span>
+                  </button>
+                  {% endif %}
                   <div class="d-sm-none text-muted small mt-1">
                     {{ s.deadline if s.deadline else '—' }}
                   </div>
@@ -144,55 +168,80 @@
 
                 {# Бейдж статуса #}
                 <td class="text-nowrap">
-                  <span class="badge bg-{{ lbl[1] }}">{{ lbl[0] }}</span>
+                  {% if rework_overdue %}
+                    <span class="badge bg-danger">Просрочен</span>
+                  {% elif s.status == 'rework' %}
+                    <span class="badge bg-warning text-dark">На доработку</span>
+                  {% elif s.status == 'in_progress' %}
+                    <span class="badge bg-warning text-dark">{{ lbl[0] }}</span>
+                  {% else %}
+                    <span class="badge bg-{{ lbl[1] }}">{{ lbl[0] }}</span>
+                  {% endif %}
                 </td>
 
-                {# Дедлайн (скрыт на xs) #}
                 <td class="small d-none d-sm-table-cell text-nowrap
-                            {% if s.status == 'overdue' %}text-danger fw-semibold
-                            {% else %}text-muted{% endif %}">
+                    {% if s.status == 'overdue' or rework_overdue %}text-danger fw-semibold{% else %}text-muted{% endif %}">
                   {{ s.deadline if s.deadline else '—' }}
                 </td>
 
-                {# Кнопка действия #}
                 <td class="text-nowrap">
                   {% if s.status == 'not_started' %}
-                    <form method="post"
-                          action="{{ url_for('foreman_stage_action', stage_id=s.id) }}">
+                    <form method="post" action="{{ url_for('foreman_stage_action', stage_id=s.id) }}">
                       <button type="submit" class="btn btn-success action-btn">
-                        <i class="bi bi-play-fill me-1"></i>
-                        <span class="d-none d-sm-inline">Начать</span>
+                        <i class="bi bi-play-fill"></i>
+                        <span class="d-none d-sm-inline ms-1">Начать</span>
                       </button>
                     </form>
 
                   {% elif s.status == 'overdue' %}
-                    <form method="post"
-                          action="{{ url_for('foreman_stage_action', stage_id=s.id) }}"
+                    <form method="post" action="{{ url_for('foreman_stage_action', stage_id=s.id) }}"
                           onsubmit="return confirm('Начать просроченный этап «{{ s.stage_name }}»?')">
                       <button type="submit" class="btn btn-danger action-btn">
-                        <i class="bi bi-exclamation-triangle-fill me-1"></i>
-                        <span class="d-none d-sm-inline">Начать</span>
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        <span class="d-none d-sm-inline ms-1">Начать</span>
+                      </button>
+                    </form>
+
+                  {% elif s.status == 'rework' %}
+                    {# «Возобновить» — сбрасывает rework_reason, → in_progress #}
+                    <form method="post" action="{{ url_for('foreman_stage_action', stage_id=s.id) }}"
+                          onsubmit="return confirm('Возобновить работу над «{{ s.stage_name }}»?')">
+                      <button type="submit" class="btn btn-warning action-btn text-dark">
+                        <i class="bi bi-arrow-counterclockwise"></i>
+                        <span class="d-none d-sm-inline ms-1">Возобновить</span>
                       </button>
                     </form>
 
                   {% elif s.status == 'in_progress' %}
-                    <form method="post"
-                          action="{{ url_for('foreman_stage_action', stage_id=s.id) }}"
-                          onsubmit="return confirm('Завершить этап «{{ s.stage_name }}»?')">
-                      <button type="submit" class="btn btn-primary action-btn">
-                        <i class="bi bi-check-lg me-1"></i>
-                        <span class="d-none d-sm-inline">Завершить</span>
-                      </button>
-                    </form>
+                    <button type="button" class="btn btn-primary action-btn"
+                            data-bs-toggle="modal" data-bs-target="#finishModal"
+                            data-stage-id="{{ s.id }}"
+                            data-stage-name="{{ s.stage_name | e }}">
+                      <i class="bi bi-camera-fill"></i>
+                      <span class="d-none d-sm-inline ms-1">Завершить</span>
+                    </button>
 
                   {% else %}{# done #}
-                    <span class="text-success small text-nowrap">
-                      <i class="bi bi-check-circle-fill me-1"></i>
-                      {{ s.completed_at[:10] if s.completed_at else 'Завершён' }}
-                    </span>
+                    <div class="d-flex align-items-center gap-1">
+                      <span class="text-success small text-nowrap">
+                        <i class="bi bi-check-circle-fill"></i>
+                        <span class="d-none d-sm-inline ms-1">{{ s.completed_at[:10] if s.completed_at else '' }}</span>
+                      </span>
+                      {% if s.photos %}
+                      <button type="button"
+                              class="btn btn-sm btn-outline-secondary py-0 px-1 ms-1"
+                              title="Смотреть фото"
+                              data-bs-toggle="modal" data-bs-target="#photosModal"
+                              data-stage-name="{{ s.stage_name | e }}"
+                              data-apt-id="{{ apt.id }}"
+                              data-stage-id="{{ s.id }}"
+                              data-photos="{{ s.photos }}">
+                        <i class="bi bi-images"></i>
+                      </button>
+                      {% endif %}
+                    </div>
                   {% endif %}
                 </td>
-
               </tr>
               {% endfor %}
             </tbody>
@@ -203,13 +252,11 @@
         {% endif %}
       </div>
     </div>
-
-  </div>{# /apt-card #}
+  </div>
   {% endfor %}
-</div>{# /accordion #}
+</div>
 
 {% else %}
-{# ── Пустое состояние ── #}
 <div class="text-center py-5">
   <i class="bi bi-inbox text-secondary" style="font-size:3rem"></i>
   <p class="mt-3 text-muted">У вас пока нет назначенных квартир.</p>
@@ -218,7 +265,96 @@
 {% endif %}
 
 
-{# ── Модальное окно «Состав работ» ── #}
+{# ══ Модалка: Причина возврата на доработку ════════════════════ #}
+<div class="modal fade" id="reworkReasonModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-warning bg-opacity-10">
+        <h5 class="modal-title">
+          <i class="bi bi-chat-square-text-fill me-2 text-warning"></i>
+          Причина возврата: <span id="rrModalStageName" class="fw-bold"></span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p id="rrModalText" class="mb-0" style="white-space:pre-line;line-height:1.7"></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+{# ══ Модалка: Завершение этапа с фото ══════════════════════════ #}
+<div class="modal fade" id="finishModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-camera-fill me-2 text-primary"></i>
+          Завершение этапа: <span id="finishModalStageName" class="fw-bold"></span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="" id="finishForm" enctype="multipart/form-data">
+        <div class="modal-body">
+
+          {# Зона выбора файлов #}
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              Фотографии выполненной работы <span class="text-danger">*</span>
+            </label>
+            <input type="file" name="photos" id="finishPhotoInput"
+                   class="form-control" multiple
+                   accept=".jpg,.jpeg,.png,.heic">
+            <div class="form-text">Можно загрузить до 30 фотографий. Форматы: JPG, PNG, HEIC.</div>
+            <div id="finishPhotoCount" class="small text-muted mt-1 d-none">Загружено <span id="finishCountNum">0</span> из 30</div>
+          </div>
+
+          {# Сообщение валидации #}
+          <div id="finishPhotoError" class="alert alert-warning py-2 small d-none">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            <span id="finishPhotoErrorText">Прикрепите минимум 1 фотографию.</span>
+          </div>
+
+          {# Превью фото #}
+          <div id="finishPreviewGrid" class="row g-2 mt-1"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+          <button type="submit" class="btn btn-primary" id="finishSubmitBtn" disabled>
+            <span id="finishSubmitSpinner" class="spinner-border spinner-border-sm me-1 d-none" role="status"></span>
+            <span id="finishSubmitText"><i class="bi bi-check-lg me-1"></i>Отправить и завершить</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+{# ══ Модалка: Просмотр фото ════════════════════════════════════ #}
+<div class="modal fade" id="photosModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-images me-2 text-primary"></i>
+          Фото: <span id="photosModalStageName" class="fw-bold"></span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="photosGrid" class="row g-2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+{# ══ Модалка: Состав работ ══════════════════════════════════════ #}
 <div class="modal fade" id="workModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content">
@@ -244,57 +380,227 @@
 
 {% block scripts %}
 <style>
-  /* ── Карточка квартиры ───────────────────────────── */
   .apt-card {
     border-radius: 12px;
     box-shadow: 0 1px 6px rgba(0,0,0,.09);
     overflow: hidden;
     transition: box-shadow .15s ease;
   }
-  .apt-card:hover {
-    box-shadow: 0 4px 16px rgba(0,0,0,.13);
-  }
+  .apt-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.13); }
+  .apt-card--done { border: 2px solid #198754; }
 
-  /* Кнопка-заголовок */
   .apt-card__header {
     padding: 16px 20px;
     cursor: pointer;
     border-radius: 12px;
     transition: background .12s ease;
   }
-  .apt-card__header:hover { background: #f5f7fa !important; }
-  .apt-card__header:focus { outline: none; box-shadow: 0 0 0 3px rgba(13,110,253,.25); }
-
-  /* Стрелка поворачивается при раскрытии */
-  .apt-card__header[aria-expanded="true"]  .apt-card__arrow i { transform: rotate(180deg); }
+  .apt-card__header:hover  { background: #f5f7fa !important; }
+  .apt-card__header:focus  { outline: none; box-shadow: 0 0 0 3px rgba(13,110,253,.25); }
+  .apt-card__header[aria-expanded="true"] .apt-card__arrow i { transform: rotate(180deg); }
   .apt-card__arrow i { transition: transform .25s ease; display: inline-block; }
 
-  /* Тело карточки */
-  .apt-card__body {
-    border-top: 1px solid #e9ecef;
-    background: #fff;
-  }
+  .apt-card__body { border-top: 1px solid #e9ecef; background: #fff; }
 
-  /* Кнопки действий: минимум 40px высоты для удобного нажатия пальцем */
-  .action-btn {
-    min-height: 40px;
-    min-width: 40px;
-    padding: 6px 12px;
-  }
+  .action-btn { min-height: 40px; min-width: 40px; padding: 6px 12px; }
   @media (max-width: 576px) {
     .apt-card__header { padding: 14px 16px; }
     .action-btn { padding: 8px 10px; }
   }
-</style>
-<script>
-  // Модалка «Состав работ»
-  const workModal = document.getElementById('workModal')
-  if (workModal) {
-    workModal.addEventListener('show.bs.modal', e => {
-      const btn = e.relatedTarget
-      workModal.querySelector('#workModalStageName').textContent = btn.dataset.stageName
-      workModal.querySelector('#workModalDesc').textContent      = btn.dataset.workDesc
-    })
+
+  /* Превью фото в модалке */
+  .photo-thumb-wrap {
+    position: relative;
+    aspect-ratio: 1;
+    overflow: hidden;
+    border-radius: 8px;
+    background: #f1f3f5;
   }
+  .photo-thumb-wrap img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .photo-thumb-wrap .remove-photo {
+    position: absolute; top: 4px; right: 4px;
+    background: rgba(0,0,0,.55); color: #fff;
+    border: none; border-radius: 50%;
+    width: 22px; height: 22px;
+    font-size: 12px; line-height: 1;
+    cursor: pointer; display: flex;
+    align-items: center; justify-content: center;
+    padding: 0;
+  }
+  /* Галерея просмотра */
+  .gallery-img {
+    width: 100%; aspect-ratio: 1;
+    object-fit: cover; border-radius: 8px;
+    cursor: zoom-in;
+    transition: opacity .15s;
+  }
+  .gallery-img:hover { opacity: .85; }
+</style>
+
+<script>
+// ── Модалка «Причина возврата» ──────────────────────────────────
+const rrModal = document.getElementById('reworkReasonModal')
+if (rrModal) {
+  rrModal.addEventListener('show.bs.modal', e => {
+    const b = e.relatedTarget
+    rrModal.querySelector('#rrModalStageName').textContent = b.dataset.stageName
+    rrModal.querySelector('#rrModalText').textContent      = b.dataset.reason
+  })
+}
+
+// ── Модалка «Состав работ» ──────────────────────────────────────
+const workModal = document.getElementById('workModal')
+if (workModal) {
+  workModal.addEventListener('show.bs.modal', e => {
+    const b = e.relatedTarget
+    workModal.querySelector('#workModalStageName').textContent = b.dataset.stageName
+    workModal.querySelector('#workModalDesc').textContent      = b.dataset.workDesc
+  })
+}
+
+// ── Модалка «Завершение этапа» ──────────────────────────────────
+const MAX_PHOTOS     = 30
+const finishModal    = document.getElementById('finishModal')
+const finishForm     = document.getElementById('finishForm')
+const finishInput    = document.getElementById('finishPhotoInput')
+const finishGrid     = document.getElementById('finishPreviewGrid')
+const finishSubmit   = document.getElementById('finishSubmitBtn')
+const finishError    = document.getElementById('finishPhotoError')
+const finishErrorTxt = document.getElementById('finishPhotoErrorText')
+const finishCount    = document.getElementById('finishPhotoCount')
+const finishCountNum = document.getElementById('finishCountNum')
+const finishSpinner  = document.getElementById('finishSubmitSpinner')
+const finishBtnText  = document.getElementById('finishSubmitText')
+
+let selectedFiles = []
+
+if (finishModal) {
+  finishModal.addEventListener('show.bs.modal', e => {
+    const b = e.relatedTarget
+    document.getElementById('finishModalStageName').textContent = b.dataset.stageName
+    finishForm.action = `/foreman/stages/${b.dataset.stageId}/finish`
+    resetFinishModal()
+  })
+  finishModal.addEventListener('hidden.bs.modal', resetFinishModal)
+}
+
+function resetFinishModal() {
+  selectedFiles = []
+  finishInput.value = ''
+  finishGrid.innerHTML = ''
+  finishSubmit.disabled = true
+  finishError.classList.add('d-none')
+  finishCount.classList.add('d-none')
+  finishSpinner.classList.add('d-none')
+  finishBtnText.innerHTML = '<i class="bi bi-check-lg me-1"></i>Отправить и завершить'
+}
+
+finishInput && finishInput.addEventListener('change', function() {
+  const newFiles = Array.from(this.files)
+  const allowed  = ['jpg','jpeg','png','heic']
+
+  for (const f of newFiles) {
+    const ext = f.name.split('.').pop().toLowerCase()
+    if (!allowed.includes(ext)) {
+      showFinishError(`Недопустимый формат: ${f.name}. Допустимо: JPG, PNG, HEIC.`)
+      this.value = ''; return
+    }
+    if (selectedFiles.length >= MAX_PHOTOS) {
+      showFinishError(`Максимум ${MAX_PHOTOS} фотографий.`)
+      this.value = ''; return
+    }
+    selectedFiles.push(f)
+  }
+  this.value = ''
+  renderPreviews()
+  validateFinish()
+})
+
+function renderPreviews() {
+  finishGrid.innerHTML = ''
+  selectedFiles.forEach((file, idx) => {
+    const col = document.createElement('div')
+    col.className = 'col-4 col-sm-3 col-md-2'
+    col.innerHTML = `
+      <div class="photo-thumb-wrap">
+        <img src="${URL.createObjectURL(file)}" alt="">
+        <button class="remove-photo" type="button" data-idx="${idx}" title="Удалить">
+          <i class="bi bi-x"></i>
+        </button>
+      </div>`
+    finishGrid.appendChild(col)
+  })
+  finishGrid.querySelectorAll('.remove-photo').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedFiles.splice(+btn.dataset.idx, 1)
+      renderPreviews(); validateFinish()
+    })
+  })
+  // Счётчик
+  if (selectedFiles.length > 0) {
+    finishCountNum.textContent = selectedFiles.length
+    finishCount.classList.remove('d-none')
+  } else {
+    finishCount.classList.add('d-none')
+  }
+}
+
+function validateFinish() {
+  if (selectedFiles.length === 0) {
+    showFinishError('Прикрепите минимум 1 фотографию.')
+    finishSubmit.disabled = true
+  } else {
+    finishError.classList.add('d-none')
+    finishSubmit.disabled = false
+  }
+}
+
+function showFinishError(msg) {
+  finishErrorTxt.textContent = msg
+  finishError.classList.remove('d-none')
+}
+
+// Перед отправкой — добавляем файлы через DataTransfer + спиннер
+finishForm && finishForm.addEventListener('submit', function(e) {
+  if (selectedFiles.length === 0) {
+    e.preventDefault(); showFinishError('Прикрепите минимум 1 фотографию.'); return
+  }
+  const dt = new DataTransfer()
+  selectedFiles.forEach(f => dt.items.add(f))
+  finishInput.files = dt.files
+  // Спиннер
+  finishSubmit.disabled = true
+  finishSpinner.classList.remove('d-none')
+  finishBtnText.textContent = 'Загрузка...'
+})
+
+
+// ── Модалка «Просмотр фото» ─────────────────────────────────────
+const photosModal = document.getElementById('photosModal')
+if (photosModal) {
+  photosModal.addEventListener('show.bs.modal', e => {
+    const b = e.relatedTarget
+    document.getElementById('photosModalStageName').textContent = b.dataset.stageName
+    const aptId    = b.dataset.aptId
+    const stageId  = b.dataset.stageId
+    const photos   = b.dataset.photos ? b.dataset.photos.split(',') : []
+    const grid     = document.getElementById('photosGrid')
+    grid.innerHTML = ''
+    photos.forEach(name => {
+      const col = document.createElement('div')
+      col.className = 'col-6 col-sm-4 col-md-3'
+      const url = `/static/uploads/${aptId}/${stageId}/${name}`
+      col.innerHTML = `
+        <a href="${url}" target="_blank" title="Открыть оригинал">
+          <img src="${url}" class="gallery-img" alt="${name}">
+        </a>`
+      grid.appendChild(col)
+    })
+  })
+}
 </script>
 {% endblock %}
