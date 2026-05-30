@@ -622,19 +622,35 @@ def guest_view(token):
 @admin_required
 def admin_dashboard():
     refresh_overdue()
-    total = query_db('SELECT COUNT(*) as c FROM apartments', one=True)['c']
+
+    # Считаем уникальные квартиры по комбинации (building_id, number)
+    total = query_db(
+        "SELECT COUNT(DISTINCT building_id || '_' || number) as c FROM apartments",
+        one=True
+    )['c']
+
     in_progress = query_db(
-        "SELECT COUNT(DISTINCT apartment_id) as c FROM apartment_stages WHERE status='in_progress'",
+        """SELECT COUNT(DISTINCT a.building_id || '_' || a.number) as c
+           FROM apartment_stages s
+           JOIN apartments a ON s.apartment_id = a.id
+           WHERE s.status = 'in_progress'""",
         one=True
     )['c']
+
     done_apts = query_db(
-        "SELECT COUNT(*) as c FROM apartments WHERE completed_at IS NOT NULL",
+        """SELECT COUNT(DISTINCT building_id || '_' || number) as c
+           FROM apartments WHERE completed_at IS NOT NULL""",
         one=True
     )['c']
+
     overdue = query_db(
-        "SELECT COUNT(DISTINCT apartment_id) as c FROM apartment_stages WHERE status='overdue'",
+        """SELECT COUNT(DISTINCT a.building_id || '_' || a.number) as c
+           FROM apartment_stages s
+           JOIN apartments a ON s.apartment_id = a.id
+           WHERE s.status = 'overdue'""",
         one=True
     )['c']
+
     buildings = query_db('SELECT * FROM buildings ORDER BY name')
     return render_template('admin/dashboard.html',
                            total=total, in_progress=in_progress,
@@ -715,8 +731,18 @@ def admin_apartments(bid):
         done = sum(1 for s in stages if s['status'] == 'done')
         apt_stats[apt['id']] = {'total': total, 'done': done,
                                  'pct': int(done / total * 100) if total else 0}
+
+    # Находим дублирующиеся номера квартир в этом ЖК
+    dup_rows = query_db(
+        '''SELECT number FROM apartments WHERE building_id=?
+           GROUP BY number HAVING COUNT(*) > 1''',
+        [bid]
+    )
+    duplicate_numbers = {r['number'] for r in dup_rows}
+
     return render_template('admin/apartments.html',
-                           building=building, apartments=apartments, apt_stats=apt_stats)
+                           building=building, apartments=apartments,
+                           apt_stats=apt_stats, duplicate_numbers=duplicate_numbers)
 
 
 @app.route('/admin/buildings/<int:bid>/apartments/add', methods=['GET', 'POST'])

@@ -19,6 +19,15 @@
   </a>
 </div>
 
+{% if duplicate_numbers %}
+<div class="alert alert-warning small mb-3">
+  <i class="bi bi-copy me-1"></i>
+  <strong>Обнаружены дубли:</strong> квартиры
+  {% for n in duplicate_numbers | sort %}<strong>№{{ n }}</strong>{% if not loop.last %}, {% endif %}{% endfor %}
+  заведены несколько раз. На дашборде они считаются как уникальные.
+</div>
+{% endif %}
+
 {% if apartments %}
 <div class="card">
   <div class="table-responsive">
@@ -35,12 +44,20 @@
       <tbody>
         {% for apt in apartments %}
         {% set stat = apt_stats[apt.id] %}
-        <tr {% if apt.completed_at %}class="table-success"{% endif %}>
+        {% set is_dup = apt.number in duplicate_numbers %}
+        <tr {% if apt.completed_at %}class="table-success"{% elif is_dup %}style="background:#FFFBEB"{% endif %}>
           <td>
-            <div class="fw-semibold">
+            <div class="fw-semibold d-flex align-items-center gap-1">
               Кв. {{ apt.number }}
               {% if apt.completed_at %}
               <i class="bi bi-check-circle-fill text-success ms-1" title="Квартира выполнена"></i>
+              {% endif %}
+              {% if is_dup %}
+              <span class="badge bg-warning ms-1"
+                    title="Эта квартира продублирована в ЖК"
+                    data-bs-toggle="tooltip">
+                <i class="bi bi-copy"></i> дубль
+              </span>
               {% endif %}
             </div>
             {# Бригадир — показываем под номером на мобильных #}
@@ -90,4 +107,12 @@
   <a href="{{ url_for('admin_apartment_add', bid=building.id) }}" class="btn btn-primary">Добавить квартиру</a>
 </div>
 {% endif %}
+
+{% block scripts %}
+<script>
+  document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el =>
+    new bootstrap.Tooltip(el, { trigger: 'hover' })
+  )
+</script>
+{% endblock %}
 {% endblock %}
