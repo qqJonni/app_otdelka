@@ -598,7 +598,10 @@ def guest_view(token):
     refresh_overdue()
     building = query_db('SELECT * FROM buildings WHERE id=?', [gt['building_id']], one=True)
     apartments = query_db(
-        'SELECT * FROM apartments WHERE building_id=? ORDER BY number', [gt['building_id']]
+        '''SELECT a.*, u.full_name as foreman_name
+           FROM apartments a LEFT JOIN users u ON a.foreman_id = u.id
+           WHERE a.building_id=? ORDER BY a.number''',
+        [gt['building_id']]
     )
 
     # Собираем данные по всем квартирам
@@ -608,22 +611,37 @@ def guest_view(token):
             'SELECT * FROM apartment_stages WHERE apartment_id=? ORDER BY order_num',
             [apt['id']]
         )
-        total = len(stages)
-        done  = sum(1 for s in stages if s['status'] == 'done')
-        pct   = int(done / total * 100) if total else 0
+        total       = len(stages)
+        done_count  = sum(1 for s in stages if s['status'] == 'done')
+        pct         = int(done_count / total * 100) if total else 0
         has_active  = any(s['status'] in ('in_progress', 'rework') for s in stages)
         has_overdue = any(s['status'] == 'overdue' for s in stages)
         all_apt_data.append({
             'apt': apt, 'stages': stages, 'pct': pct,
+            'total': total, 'done_count': done_count,
             'has_active': has_active, 'has_overdue': has_overdue,
         })
 
-    # Статистика по всем квартирам (не меняется при фильтре)
+    # Статистика — считаем уникальные квартиры по номеру (без дублей)
+    seen_nums        = set()
+    nums_active      = set()
+    nums_done        = set()
+    nums_overdue     = set()
+    for d in all_apt_data:
+        num = d['apt']['number']
+        seen_nums.add(num)
+        if d['has_active'] and not d['apt']['completed_at']:
+            nums_active.add(num)
+        if d['apt']['completed_at']:
+            nums_done.add(num)
+        if d['has_overdue']:
+            nums_overdue.add(num)
+
     stats = {
-        'total':    len(all_apt_data),
-        'active':   sum(1 for d in all_apt_data if d['has_active'] and not d['apt']['completed_at']),
-        'done':     sum(1 for d in all_apt_data if d['apt']['completed_at']),
-        'overdue':  sum(1 for d in all_apt_data if d['has_overdue']),
+        'total':   len(seen_nums),
+        'active':  len(nums_active),
+        'done':    len(nums_done),
+        'overdue': len(nums_overdue),
     }
 
     # Применяем фильтр
@@ -645,21 +663,11 @@ def guest_view(token):
 
 @app.route('/guest/<token>/export')
 def guest_export(token):
-    """Скачать Excel-сводку по ЖК для гостя."""
+    """Скачать расширенную Excel-сводку (2 листа) по ЖК для гостя."""
     gt = query_db('SELECT * FROM guest_tokens WHERE token=?', [token], one=True)
     if not gt:
         abort(404)
     building = query_db('SELECT * FROM buildings WHERE id=?', [gt['building_id']], one=True)
-
-    rows = query_db(
-        '''SELECT a.number, s.stage_name, s.status, s.volume_sqm, s.unit,
-                  s.deadline, s.completed_at
-           FROM apartment_stages s
-           JOIN apartments a ON s.apartment_id = a.id
-           WHERE a.building_id=?
-           ORDER BY a.number, s.order_num''',
-        [gt['building_id']]
-    )
 
     STATUS_RU = {
         'not_started': 'Не начат',
@@ -669,38 +677,179 @@ def guest_export(token):
         'rework':      'На доработку',
     }
 
+    def apt_status_ru(apt, stages):
+        if apt['completed_at']:
+            return 'Завершена'
+        if any(s['status'] == 'overdue' for s in stages):
+            return 'Просрочена'
+        return 'В работе'
+
+    def days_delta(plan_str, fact_str):
+        """Положительное = сдали раньше, отрицательное = опоздание."""
+        if not plan_str or not fact_str:
+            return None
+        try:
+            plan = date.fromisoformat(plan_str[:10])
+            fact = date.fromisoformat(fact_str[:10])
+            return (plan - fact).days
+        except Exception:
+            return None
+
+    def stage_days_delta(deadline_str, completed_str):
+        if not deadline_str:
+            return None
+        try:
+            dl = date.fromisoformat(deadline_str[:10])
+            if completed_str:
+                fact = date.fromisoformat(completed_str[:10])
+                return (dl - fact).days          # >0 раньше, <0 опоздание
+            else:
+                today = date.today()
+                if today > dl:
+                    return (dl - today).days     # отрицательное
+                return None
+        except Exception:
+            return None
+
+    # Загружаем все квартиры с этапами
+    apartments = query_db(
+        '''SELECT a.*, u.full_name as foreman_name
+           FROM apartments a LEFT JOIN users u ON a.foreman_id = u.id
+           WHERE a.building_id=? ORDER BY a.number''',
+        [gt['building_id']]
+    )
+
+    apt_full = []
+    for apt in apartments:
+        stages = query_db(
+            'SELECT * FROM apartment_stages WHERE apartment_id=? ORDER BY order_num',
+            [apt['id']]
+        )
+        total      = len(stages)
+        done_count = sum(1 for s in stages if s['status'] == 'done')
+        pct        = int(done_count / total * 100) if total else 0
+        apt_full.append({'apt': apt, 'stages': list(stages),
+                         'total': total, 'done': done_count, 'pct': pct})
+
+    # ── Стили ──────────────────────────────────────────────────────
     wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = 'Сводка'
 
-    header_fill = PatternFill(fill_type='solid', fgColor='4472C4')
-    header_font = Font(bold=True, color='FFFFFF')
+    hdr_fill  = PatternFill(fill_type='solid', fgColor='1E3A5F')
+    hdr_font  = Font(bold=True, color='FFFFFF', size=11)
+    hdr_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    body_align_c = Alignment(horizontal='center', vertical='center')
+    body_align_l = Alignment(horizontal='left',   vertical='center')
 
-    headers = ['Квартира', 'Этап', 'Статус', 'Объём', 'Ед. изм.', 'Дедлайн', 'Завершён']
-    for col, h in enumerate(headers, 1):
-        cell = ws.cell(row=1, column=col, value=h)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = Alignment(horizontal='center')
+    done_fill    = PatternFill(fill_type='solid', fgColor='D1FAE5')
+    overdue_fill = PatternFill(fill_type='solid', fgColor='FEE2E2')
+    active_fill  = PatternFill(fill_type='solid', fgColor='DBEAFE')
 
-    for i, row in enumerate(rows, 2):
-        ws.cell(row=i, column=1, value=row['number'])
-        ws.cell(row=i, column=2, value=row['stage_name'])
-        ws.cell(row=i, column=3, value=STATUS_RU.get(row['status'], row['status']))
-        ws.cell(row=i, column=4, value=row['volume_sqm'])
-        ws.cell(row=i, column=5, value=row['unit'] or 'м2')
-        ws.cell(row=i, column=6, value=row['deadline'] or '')
-        completed = row['completed_at']
-        ws.cell(row=i, column=7, value=completed[:10] if completed else '')
+    def write_header(ws, headers):
+        ws.row_dimensions[1].height = 30
+        for col, h in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=h)
+            cell.font  = hdr_font
+            cell.fill  = hdr_fill
+            cell.alignment = hdr_align
 
-    for col in ws.columns:
-        max_len = max(len(str(cell.value or '')) for cell in col)
-        ws.column_dimensions[col[0].column_letter].width = max_len + 4
+    def autowidth(ws):
+        for col in ws.columns:
+            vals = [str(c.value or '') for c in col]
+            ws.column_dimensions[col[0].column_letter].width = min(max(len(v) for v in vals) + 4, 40)
+
+    # ══ Лист 1: Сводка по квартирам ═══════════════════════════════
+    ws1 = wb.active
+    ws1.title = 'Сводка по квартирам'
+    ws1.freeze_panes = 'A2'
+
+    h1 = [
+        'Квартира', f'ЖК: {building["name"]}', 'Статус',
+        '% готовности', 'Завершено этапов', 'Всего этапов',
+        'Плановая дата сдачи', 'Факт. завершение',
+        'Δ дней (+ раньше / − опоздание)', 'Бригадир'
+    ]
+    write_header(ws1, h1)
+
+    for i, d in enumerate(apt_full, 2):
+        apt    = d['apt']
+        stages = d['stages']
+        status = apt_status_ru(apt, stages)
+        delta  = days_delta(apt['plan_end_date'], apt['completed_at'])
+
+        row_fill = None
+        if status == 'Завершена':   row_fill = done_fill
+        elif status == 'Просрочена': row_fill = overdue_fill
+        else:                        row_fill = active_fill
+
+        vals = [
+            apt['number'],
+            building['name'] + (f', {building["address"]}' if building['address'] else ''),
+            status,
+            f'{d["pct"]}%',
+            d['done'],
+            d['total'],
+            apt['plan_end_date'] or '—',
+            apt['completed_at'][:10] if apt['completed_at'] else '—',
+            delta if delta is not None else '—',
+            apt['foreman_name'] or '—',
+        ]
+        for col, v in enumerate(vals, 1):
+            cell = ws1.cell(row=i, column=col, value=v)
+            cell.fill = row_fill
+            cell.alignment = body_align_c if col != 2 else body_align_l
+
+    autowidth(ws1)
+
+    # ══ Лист 2: Сводка по этапам ══════════════════════════════════
+    ws2 = wb.create_sheet('Сводка по этапам')
+    ws2.freeze_panes = 'A2'
+
+    h2 = [
+        'Квартира', 'Этап', 'Статус',
+        'Объём', 'Ед. изм.',
+        'Дедлайн', 'Дата завершения',
+        'Δ дней этапа', 'Возвратов на доработку', 'Есть фото'
+    ]
+    write_header(ws2, h2)
+
+    row_idx = 2
+    for d in apt_full:
+        apt    = d['apt']
+        for s in d['stages']:
+            status = STATUS_RU.get(s['status'], s['status'])
+            delta  = stage_days_delta(s['deadline'], s['completed_at'])
+
+            s_fill = None
+            if s['status'] == 'done':    s_fill = done_fill
+            elif s['status'] == 'overdue': s_fill = overdue_fill
+            elif s['status'] in ('in_progress', 'rework'): s_fill = active_fill
+
+            vals = [
+                apt['number'],
+                s['stage_name'],
+                status,
+                s['volume_sqm'],
+                s['unit'] or 'м2',
+                s['deadline'] or '—',
+                s['completed_at'][:10] if s['completed_at'] else '—',
+                delta if delta is not None else '—',
+                s['rework_count'] or 0,
+                'Да' if s['photos'] else 'Нет',
+            ]
+            for col, v in enumerate(vals, 1):
+                cell = ws2.cell(row=row_idx, column=col, value=v)
+                if s_fill:
+                    cell.fill = s_fill
+                cell.alignment = body_align_c if col not in (1, 2) else body_align_l
+            row_idx += 1
+
+    autowidth(ws2)
 
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
-    filename = f'сводка_{building["name"]}.xlsx'.replace(' ', '_')
+    bname = building['name'].replace(' ', '_').replace('/', '-')
+    filename = f'сводка_{bname}.xlsx'
     return send_file(buf, download_name=filename, as_attachment=True,
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
