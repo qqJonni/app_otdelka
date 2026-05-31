@@ -1,0 +1,471 @@
+{% extends 'base.html' %}
+{% block title %}Приёмка квартир — Штаб отделки{% endblock %}
+{% block page_heading %}Приёмка квартир{% endblock %}
+
+{# ── Боковая панель по роли ─────────────────────────────────── #}
+{% block sidebar %}
+  {% if current_user.role == 'admin' %}
+    {% include 'admin/_sidebar.html' %}
+  {% else %}
+    <aside class="crm-sidebar d-none d-md-flex flex-column">
+      <div class="crm-sidebar-logo">
+        <a href="{{ url_for('foreman_dashboard') }}">
+          <div class="logo-icon"><i class="bi bi-building text-white"></i></div>
+          <span>Штаб отделки</span>
+        </a>
+      </div>
+      <nav class="crm-sidebar-nav">
+        <a class="crm-sidebar-link" href="{{ url_for('foreman_dashboard') }}">
+          <i class="bi bi-house-door"></i><span>Мои квартиры</span>
+        </a>
+        <a class="crm-sidebar-link active" href="{{ url_for('acceptance_list') }}">
+          <i class="bi bi-clipboard-check"></i><span>Приёмка квартир</span>
+        </a>
+      </nav>
+      <div class="crm-sidebar-footer">
+        <a class="crm-sidebar-link {% if request.endpoint == 'profile' %}active{% endif %}"
+           href="{{ url_for('profile') }}">
+          {% if current_user.avatar %}
+            <img src="{{ url_for('static', filename='avatars/' + current_user.avatar) }}"
+                 class="crm-sidebar-avatar" alt=""
+                 onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'">
+            <span class="crm-sidebar-avatar-circle" style="display:none">{{ current_user.initials }}</span>
+          {% else %}
+            <span class="crm-sidebar-avatar-circle">{{ current_user.initials }}</span>
+          {% endif %}
+          <span>{{ current_user.full_name or current_user.username }}</span>
+        </a>
+        <a class="crm-sidebar-link" href="{{ url_for('logout') }}">
+          <i class="bi bi-box-arrow-right"></i><span>Выйти</span>
+        </a>
+      </div>
+    </aside>
+  {% endif %}
+{% endblock %}
+
+{% set STATUS_COLOR = {'принята': 'success', 'не принята': 'danger', 'замечания': 'warning'} %}
+
+{% block content %}
+{# ── Заголовок ──────────────────────────────────────────────── #}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="fw-bold mb-0"><i class="bi bi-clipboard-check me-2 text-primary"></i>Приёмка квартир</h4>
+  <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal">
+    <i class="bi bi-plus-lg me-1"></i><span class="d-none d-sm-inline">Добавить запись</span><span class="d-sm-none">Добавить</span>
+  </button>
+</div>
+
+{# ── Таблица ────────────────────────────────────────────────── #}
+{% if acc_data %}
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0 align-middle">
+      <thead>
+        <tr>
+          <th>Квартира</th>
+          <th class="d-none d-md-table-cell">ЖК</th>
+          <th>Статус</th>
+          <th class="d-none d-md-table-cell">Бригадир</th>
+          <th class="d-none d-lg-table-cell">Дата</th>
+          <th style="width:60px">Фото</th>
+          <th style="width:140px"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in acc_data %}
+        {% set r = d.record %}
+        {% set color = STATUS_COLOR.get(r.status, 'secondary') %}
+        <tr>
+          <td>
+            <div class="fw-semibold">Кв. {{ r.apartment_number }}</div>
+            <div class="text-muted small d-md-none">{{ r.building_name }}</div>
+            <div class="text-muted small d-lg-none">{{ r.created_at[:10] if r.created_at else '' }}</div>
+          </td>
+          <td class="d-none d-md-table-cell text-muted small">{{ r.building_name }}</td>
+          <td>
+            <span class="badge bg-{{ color }}">{{ r.status | capitalize }}</span>
+          </td>
+          <td class="d-none d-md-table-cell text-muted small">{{ r.foreman_name or '—' }}</td>
+          <td class="d-none d-lg-table-cell text-muted small text-nowrap">
+            {{ r.created_at[:10] if r.created_at else '—' }}
+          </td>
+          <td class="text-center">
+            {% if d.photos %}
+            <button type="button"
+                    class="btn btn-sm btn-link p-0 text-muted"
+                    title="{{ d.photos | length }} фото"
+                    data-bs-toggle="modal"
+                    data-bs-target="#photosModal"
+                    data-acc-id="{{ r.id }}"
+                    data-stage-name="Кв. {{ r.apartment_number }}"
+                    data-photos='{{ d.photos | tojson }}'>
+              <i class="bi bi-camera-fill text-primary" style="font-size:16px"></i>
+              <span class="small ms-1">{{ d.photos | length }}</span>
+            </button>
+            {% else %}
+            <span class="text-muted small">—</span>
+            {% endif %}
+          </td>
+          <td class="text-end text-nowrap p-1">
+            {# Редактировать #}
+            <button type="button"
+                    class="btn btn-outline-primary btn-sm"
+                    title="Редактировать"
+                    data-bs-toggle="modal"
+                    data-bs-target="#editModal"
+                    data-acc-id="{{ r.id }}"
+                    data-building-id="{{ r.building_id }}"
+                    data-apt-number="{{ r.apartment_number | e }}"
+                    data-status="{{ r.status }}"
+                    data-foreman-id="{{ r.foreman_id or '' }}"
+                    data-comment="{{ r.comment or '' | e }}"
+                    data-photos='{{ d.photos | tojson }}'>
+              <i class="bi bi-pencil"></i>
+            </button>
+            {# Удалить #}
+            <form method="post" action="{{ url_for('acceptance_delete', acc_id=r.id) }}"
+                  class="d-inline"
+                  onsubmit="return confirm('Удалить запись приёмки квартиры №{{ r.apartment_number }}?\nВсе фото также будут удалены.')">
+              <button class="btn btn-outline-danger btn-sm" title="Удалить">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-clipboard-x" style="font-size:3rem"></i>
+  <p class="mt-3">Записей приёмки пока нет.</p>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
+    <i class="bi bi-plus-lg me-1"></i>Добавить первую запись
+  </button>
+</div>
+{% endif %}
+
+
+{# ══ Модалка: Добавить запись ════════════════════════════════ #}
+<div class="modal fade" id="addModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <form method="post" action="{{ url_for('acceptance_add') }}" enctype="multipart/form-data">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-plus-circle me-2 text-primary"></i>Добавить запись приёмки</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-12 col-sm-6">
+              <label class="form-label">ЖК <span class="text-danger">*</span></label>
+              <select name="building_id" class="form-select" required>
+                <option value="">— выбрать ЖК —</option>
+                {% for b in buildings %}
+                <option value="{{ b.id }}">{{ b.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label">Номер квартиры <span class="text-danger">*</span></label>
+              <input type="text" name="apartment_number" class="form-control"
+                     placeholder="Например: 25 или 12А" required>
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label">Статус <span class="text-danger">*</span></label>
+              <select name="status" class="form-select" required>
+                {% for s in ACCEPTANCE_STATUSES %}
+                <option value="{{ s }}">{{ s | capitalize }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label">Бригадир</label>
+              <select name="foreman_id" class="form-select">
+                <option value="">— не указан —</option>
+                {% for f in foremen %}
+                <option value="{{ f.id }}">{{ f.full_name or f.username }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Комментарий / замечания</label>
+              <textarea name="comment" class="form-control" rows="3"
+                        placeholder="Опишите замечания или результат приёмки..."></textarea>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Фотографии</label>
+              <input type="file" name="photos" id="addPhotoInput"
+                     class="form-control" multiple
+                     accept=".jpg,.jpeg,.png,.heic">
+              <div class="form-text">Форматы: JPG, PNG, HEIC. Без ограничений по количеству и размеру.</div>
+              <div id="addPreviewGrid" class="row g-2 mt-2"></div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg me-1"></i>Сохранить
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+{# ══ Модалка: Редактировать запись ══════════════════════════ #}
+<div class="modal fade" id="editModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <form method="post" action="" id="editForm" enctype="multipart/form-data">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-pencil me-2 text-primary"></i>Редактировать запись</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-12 col-sm-6">
+              <label class="form-label">ЖК <span class="text-danger">*</span></label>
+              <select name="building_id" id="editBuildingId" class="form-select" required>
+                <option value="">— выбрать ЖК —</option>
+                {% for b in buildings %}
+                <option value="{{ b.id }}">{{ b.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label">Номер квартиры <span class="text-danger">*</span></label>
+              <input type="text" name="apartment_number" id="editAptNumber" class="form-control" required>
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label">Статус <span class="text-danger">*</span></label>
+              <select name="status" id="editStatus" class="form-select" required>
+                {% for s in ACCEPTANCE_STATUSES %}
+                <option value="{{ s }}">{{ s | capitalize }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label">Бригадир</label>
+              <select name="foreman_id" id="editForemanId" class="form-select">
+                <option value="">— не указан —</option>
+                {% for f in foremen %}
+                <option value="{{ f.id }}">{{ f.full_name or f.username }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Комментарий / замечания</label>
+              <textarea name="comment" id="editComment" class="form-control" rows="3"></textarea>
+            </div>
+            {# Существующие фото #}
+            <div class="col-12" id="editExistingPhotosWrap">
+              <label class="form-label">Текущие фото</label>
+              <div id="editExistingPhotos" class="row g-2"></div>
+            </div>
+            {# Добавить новые фото #}
+            <div class="col-12">
+              <label class="form-label">Добавить фото</label>
+              <input type="file" name="photos" id="editPhotoInput"
+                     class="form-control" multiple
+                     accept=".jpg,.jpeg,.png,.heic">
+              <div class="form-text">Новые фото добавятся к существующим.</div>
+              <div id="editPreviewGrid" class="row g-2 mt-2"></div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg me-1"></i>Сохранить изменения
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+{# ══ Модалка: Просмотр фото ══════════════════════════════════ #}
+<div class="modal fade" id="photosModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-images me-2 text-primary"></i>
+          Фото: <span id="photosModalTitle" class="fw-bold"></span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="photosMainWrap" class="mb-3" style="background:#000;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;min-height:260px">
+          <img id="photosMainImg" src="" alt="" style="max-width:100%;max-height:65vh;object-fit:contain;display:block">
+        </div>
+        <div id="photosThumbGrid" class="row g-2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+{% endblock %}
+
+
+{% block scripts %}
+<style>
+  .acc-thumb-wrap {
+    position: relative; aspect-ratio: 1;
+    overflow: hidden; border-radius: 8px; background: #F1F5F9;
+  }
+  .acc-thumb-wrap img { width:100%; height:100%; object-fit:cover; display:block; }
+  .acc-thumb-wrap .remove-photo {
+    position: absolute; top:4px; right:4px;
+    background: rgba(0,0,0,.55); color:#fff;
+    border:none; border-radius:50%;
+    width:22px; height:22px; font-size:12px; line-height:1;
+    cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;
+  }
+  .gallery-thumb {
+    width:100%; aspect-ratio:1; object-fit:cover;
+    border-radius:8px; cursor:pointer; transition:opacity .15s;
+    border:2px solid transparent;
+  }
+  .gallery-thumb:hover { opacity:.85; }
+  .gallery-thumb.active { border-color:#3B82F6; }
+</style>
+
+<script>
+// ── Превью при добавлении фото ───────────────────────────────────
+function previewFiles(input, gridId) {
+  const grid = document.getElementById(gridId)
+  input.addEventListener('change', function() {
+    grid.innerHTML = ''
+    Array.from(this.files).forEach(file => {
+      const col = document.createElement('div')
+      col.className = 'col-4 col-sm-3 col-md-2'
+      col.innerHTML = `<div class="acc-thumb-wrap">
+        <img src="${URL.createObjectURL(file)}" alt=""></div>`
+      grid.appendChild(col)
+    })
+  })
+}
+previewFiles(document.getElementById('addPhotoInput'), 'addPreviewGrid')
+previewFiles(document.getElementById('editPhotoInput'), 'editPreviewGrid')
+
+// ── Модалка «Редактировать» ──────────────────────────────────────
+const editModal = document.getElementById('editModal')
+if (editModal) {
+  editModal.addEventListener('show.bs.modal', e => {
+    const b = e.relatedTarget
+    const accId = b.dataset.accId
+    document.getElementById('editForm').action = `/acceptance/${accId}/edit`
+    document.getElementById('editAptNumber').value  = b.dataset.aptNumber
+    document.getElementById('editComment').value    = b.dataset.comment
+
+    // Выбрать ЖК
+    const bldSel = document.getElementById('editBuildingId')
+    for (let opt of bldSel.options)
+      opt.selected = (opt.value === b.dataset.buildingId)
+
+    // Выбрать статус
+    const stSel = document.getElementById('editStatus')
+    for (let opt of stSel.options)
+      opt.selected = (opt.value === b.dataset.status)
+
+    // Выбрать бригадира
+    const frmSel = document.getElementById('editForemanId')
+    for (let opt of frmSel.options)
+      opt.selected = (opt.value === b.dataset.foremanId)
+
+    // Текущие фото
+    const photosWrap = document.getElementById('editExistingPhotos')
+    photosWrap.innerHTML = ''
+    let photos = []
+    try { photos = JSON.parse(b.dataset.photos || '[]') } catch(ex) {}
+
+    document.getElementById('editExistingPhotosWrap').style.display =
+      photos.length ? '' : 'none'
+
+    photos.forEach(p => {
+      const url = `/static/acceptance/${accId}/${p.filename}`
+      const col = document.createElement('div')
+      col.className = 'col-4 col-sm-3 col-md-2'
+      col.id = `photo-col-${p.id}`
+      col.innerHTML = `<div class="acc-thumb-wrap">
+        <img src="${url}" alt="">
+        <button class="remove-photo" type="button"
+                data-acc-id="${accId}" data-photo-id="${p.id}"
+                title="Удалить фото">
+          <i class="bi bi-x"></i></button></div>`
+      photosWrap.appendChild(col)
+    })
+
+    // Удаление фото через AJAX
+    photosWrap.querySelectorAll('.remove-photo').forEach(btn => {
+      btn.addEventListener('click', async function() {
+        const aid = this.dataset.accId
+        const pid = this.dataset.photoId
+        if (!confirm('Удалить это фото?')) return
+        const res = await fetch(`/acceptance/${aid}/photo/${pid}/delete`,
+                                { method:'POST' })
+        if (res.ok) {
+          document.getElementById(`photo-col-${pid}`)?.remove()
+          if (!photosWrap.children.length)
+            document.getElementById('editExistingPhotosWrap').style.display = 'none'
+        } else {
+          alert('Не удалось удалить фото.')
+        }
+      })
+    })
+
+    // Сброс превью новых фото
+    document.getElementById('editPreviewGrid').innerHTML = ''
+    document.getElementById('editPhotoInput').value = ''
+  })
+}
+
+// ── Просмотр фото ────────────────────────────────────────────────
+const photosModal = document.getElementById('photosModal')
+if (photosModal) {
+  photosModal.addEventListener('show.bs.modal', e => {
+    const b = e.relatedTarget
+    document.getElementById('photosModalTitle').textContent = b.dataset.stageName
+    const accId  = b.dataset.accId
+    const grid   = document.getElementById('photosThumbGrid')
+    const mainImg = document.getElementById('photosMainImg')
+    grid.innerHTML = ''; mainImg.src = ''
+
+    let photos = []
+    try { photos = JSON.parse(b.dataset.photos || '[]') } catch(ex) {}
+    if (!photos.length) return
+
+    mainImg.src = `/static/acceptance/${accId}/${photos[0].filename}`
+
+    photos.forEach((p, i) => {
+      const url = `/static/acceptance/${accId}/${p.filename}`
+      const col = document.createElement('div')
+      col.className = 'col-4 col-sm-3 col-md-2'
+      col.innerHTML = `<img src="${url}" class="gallery-thumb${i===0?' active':''}"
+                            alt="" data-url="${url}">`
+      grid.appendChild(col)
+    })
+    grid.querySelectorAll('.gallery-thumb').forEach(img => {
+      img.addEventListener('click', function() {
+        mainImg.src = this.dataset.url
+        grid.querySelectorAll('.gallery-thumb').forEach(t => t.classList.remove('active'))
+        this.classList.add('active')
+      })
+    })
+  })
+  photosModal.addEventListener('hidden.bs.modal', () => {
+    document.getElementById('photosMainImg').src = ''
+    document.getElementById('photosThumbGrid').innerHTML = ''
+  })
+}
+
+</script>
+{% endblock %}

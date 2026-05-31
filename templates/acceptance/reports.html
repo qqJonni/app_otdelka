@@ -1,0 +1,246 @@
+{% extends 'base.html' %}
+{% block title %}Отчёты по приёмке — Штаб отделки{% endblock %}
+{% block page_heading %}Отчёты по приёмке{% endblock %}
+
+{% block sidebar %}
+  {% if current_user.role == 'admin' %}
+    {% include 'admin/_sidebar.html' %}
+  {% else %}
+    <aside class="crm-sidebar d-none d-md-flex flex-column">
+      <div class="crm-sidebar-logo">
+        <a href="{{ url_for('foreman_dashboard') }}">
+          <div class="logo-icon"><i class="bi bi-building text-white"></i></div>
+          <span>Штаб отделки</span>
+        </a>
+      </div>
+      <nav class="crm-sidebar-nav">
+        <a class="crm-sidebar-link" href="{{ url_for('foreman_dashboard') }}">
+          <i class="bi bi-house-door"></i><span>Мои квартиры</span>
+        </a>
+        <a class="crm-sidebar-link" href="{{ url_for('acceptance_list') }}">
+          <i class="bi bi-clipboard-check"></i><span>Приёмка квартир</span>
+        </a>
+        <a class="crm-sidebar-link active" href="{{ url_for('acceptance_reports') }}">
+          <i class="bi bi-link-45deg"></i><span>Отчёты по приёмке</span>
+        </a>
+      </nav>
+      <div class="crm-sidebar-footer">
+        <a class="crm-sidebar-link {% if request.endpoint == 'profile' %}active{% endif %}"
+           href="{{ url_for('profile') }}">
+          {% if current_user.avatar %}
+            <img src="{{ url_for('static', filename='avatars/' + current_user.avatar) }}"
+                 class="crm-sidebar-avatar" alt=""
+                 onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'">
+            <span class="crm-sidebar-avatar-circle" style="display:none">{{ current_user.initials }}</span>
+          {% else %}
+            <span class="crm-sidebar-avatar-circle">{{ current_user.initials }}</span>
+          {% endif %}
+          <span>{{ current_user.full_name or current_user.username }}</span>
+        </a>
+        <a class="crm-sidebar-link" href="{{ url_for('logout') }}">
+          <i class="bi bi-box-arrow-right"></i><span>Выйти</span>
+        </a>
+      </div>
+    </aside>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="fw-bold mb-0"><i class="bi bi-link-45deg me-2 text-primary"></i>Отчёты по приёмке</h4>
+  <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#createModal">
+    <i class="bi bi-plus-lg me-1"></i><span class="d-none d-sm-inline">Создать отчёт</span><span class="d-sm-none">Создать</span>
+  </button>
+</div>
+
+{% if report_data %}
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0 align-middle">
+      <thead>
+        <tr>
+          <th>Бригадир</th>
+          <th class="d-none d-md-table-cell">ЖК</th>
+          <th style="width:80px" class="text-center">Квартир</th>
+          <th class="d-none d-lg-table-cell">Дата</th>
+          <th>Ссылка</th>
+          <th style="width:100px"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in report_data %}
+        {% set r = d.report %}
+        {% set link = request.host_url.rstrip('/') + '/acceptance/report/' + r.token %}
+        <tr>
+          <td>
+            <div class="fw-semibold">{{ r.foreman_name or '—' }}</div>
+            <div class="text-muted small d-md-none">{{ r.building_name or 'Все ЖК' }}</div>
+          </td>
+          <td class="d-none d-md-table-cell text-muted small">{{ r.building_name or 'Все ЖК' }}</td>
+          <td class="text-center">
+            <span class="badge bg-primary">{{ d.apt_count }}</span>
+          </td>
+          <td class="d-none d-lg-table-cell text-muted small text-nowrap">
+            {{ r.created_at[:10] if r.created_at else '—' }}
+          </td>
+          <td>
+            <div class="input-group input-group-sm">
+              <input type="text" class="form-control form-control-sm report-link-input"
+                     value="{{ link }}" readonly style="font-size:12px;min-width:0">
+              <button class="btn btn-outline-secondary btn-sm copy-link-btn"
+                      type="button"
+                      data-link="{{ link }}"
+                      title="Копировать ссылку">
+                <i class="bi bi-clipboard"></i>
+              </button>
+            </div>
+          </td>
+          <td class="text-end text-nowrap p-1">
+            <button type="button"
+                    class="btn btn-outline-secondary btn-sm reset-link-btn"
+                    title="Сбросить ссылку"
+                    data-rep-id="{{ r.id }}">
+              <i class="bi bi-arrow-counterclockwise"></i>
+            </button>
+            <form method="post" action="{{ url_for('acceptance_report_delete_tok', rep_id=r.id) }}"
+                  class="d-inline"
+                  onsubmit="return confirm('Удалить отчёт? Ссылка перестанет работать.')">
+              <button class="btn btn-outline-danger btn-sm" title="Удалить">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-link-45deg" style="font-size:3rem"></i>
+  <p class="mt-3">Отчётов пока нет.</p>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createModal">
+    <i class="bi bi-plus-lg me-1"></i>Создать первый отчёт
+  </button>
+</div>
+{% endif %}
+
+
+{# ══ Модалка: Создать отчёт ════════════════════════════════ #}
+<div class="modal fade" id="createModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" action="{{ url_for('acceptance_report_create') }}" id="createReportForm">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-plus-circle me-2 text-primary"></i>Создать отчёт</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+
+          {% if current_user.role == 'admin' %}
+          <div class="mb-3">
+            <label class="form-label">Бригадир <span class="text-danger">*</span></label>
+            <select name="foreman_id" id="createForemanId" class="form-select" required>
+              <option value="">— выбрать бригадира —</option>
+              {% for f in foremen %}
+              <option value="{{ f.id }}">{{ f.full_name or f.username }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          {% endif %}
+
+          <div class="mb-3">
+            <label class="form-label">Жилой комплекс</label>
+            <select name="building_id" id="createBuildingId" class="form-select">
+              <option value="">— Все ЖК —</option>
+              {% for b in buildings %}
+              <option value="{{ b.id }}">{{ b.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="alert alert-info py-2 small mb-0" id="aptCountAlert">
+            <i class="bi bi-info-circle me-1"></i>
+            Будет включено: <strong id="aptCountValue">—</strong> квартир
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg me-1"></i>Создать и скопировать ссылку
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+// ── Копировать ссылку ────────────────────────────────────────────
+document.querySelectorAll('.copy-link-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    const link = this.dataset.link
+    navigator.clipboard.writeText(link).then(() => {
+      const icon = this.querySelector('i')
+      icon.className = 'bi bi-check-lg text-success'
+      setTimeout(() => icon.className = 'bi bi-clipboard', 2000)
+    })
+  })
+})
+
+// ── Сбросить ссылку ──────────────────────────────────────────────
+document.querySelectorAll('.reset-link-btn').forEach(btn => {
+  btn.addEventListener('click', async function() {
+    if (!confirm('Старая ссылка перестанет работать. Продолжить?')) return
+    const repId = this.dataset.repId
+    const res   = await fetch(`/acceptance/reports/${repId}/reset`, { method: 'POST' })
+    if (!res.ok) { alert('Ошибка при сбросе.'); return }
+    const data = await res.json()
+    const newLink = `${location.origin}${data.url}`
+    // Обновляем input в той же строке
+    const row = this.closest('tr')
+    const input = row.querySelector('.report-link-input')
+    const copyBtn = row.querySelector('.copy-link-btn')
+    if (input) input.value = newLink
+    if (copyBtn) copyBtn.dataset.link = newLink
+    navigator.clipboard.writeText(newLink)
+    const icon = this.querySelector('i')
+    icon.className = 'bi bi-check-lg text-success'
+    setTimeout(() => icon.className = 'bi bi-arrow-counterclockwise', 2000)
+  })
+})
+
+// ── Динамический счётчик квартир при создании ────────────────────
+async function updateAptCount() {
+  {% if current_user.role == 'admin' %}
+  const foremanId  = document.getElementById('createForemanId')?.value || ''
+  {% else %}
+  const foremanId  = '{{ current_user.id }}'
+  {% endif %}
+  const buildingId = document.getElementById('createBuildingId')?.value || ''
+
+  if (!foremanId) {
+    document.getElementById('aptCountValue').textContent = '—'
+    return
+  }
+  const params = new URLSearchParams({ foreman_id: foremanId })
+  if (buildingId) params.append('building_id', buildingId)
+  const res  = await fetch(`/acceptance/reports/count?${params}`)
+  const data = await res.json()
+  document.getElementById('aptCountValue').textContent = data.count
+}
+
+document.getElementById('createForemanId')?.addEventListener('change', updateAptCount)
+document.getElementById('createBuildingId')?.addEventListener('change', updateAptCount)
+
+// Автовызов для бригадира (у него нет селекта бригадира)
+{% if current_user.role != 'admin' %}
+document.getElementById('createBuildingId')?.addEventListener('change', updateAptCount)
+document.addEventListener('DOMContentLoaded', updateAptCount)
+{% endif %}
+</script>
+{% endblock %}

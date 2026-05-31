@@ -18,6 +18,14 @@
         <a class="crm-sidebar-link" href="{{ url_for('foreman_dashboard') }}">
           <i class="bi bi-house-door"></i><span>Мои квартиры</span>
         </a>
+        <a class="crm-sidebar-link {% if request.endpoint in ['acceptance_list','acceptance_add','acceptance_edit','acceptance_delete','acceptance_photo_delete'] %}active{% endif %}"
+           href="{{ url_for('acceptance_list') }}">
+          <i class="bi bi-clipboard-check"></i><span>Приёмка квартир</span>
+        </a>
+        <a class="crm-sidebar-link {% if request.endpoint in ['acceptance_reports','acceptance_report_create','acceptance_report_reset_tok','acceptance_report_delete_tok'] %}active{% endif %}"
+           href="{{ url_for('acceptance_reports') }}">
+          <i class="bi bi-link-45deg"></i><span>Отчёты по приёмке</span>
+        </a>
       </nav>
       <div class="crm-sidebar-footer">
         <a class="crm-sidebar-link active" href="{{ url_for('profile') }}">

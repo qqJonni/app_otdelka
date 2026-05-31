@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Приёмка квартир — {{ foreman.full_name if foreman else '' }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: 'Inter', system-ui, sans-serif; background: #F5F6FA; min-height: 100vh; }
+
+    /* Навбар */
+    .r-nav {
+      background: #1E293B; height: 52px;
+      display: flex; align-items: center; padding: 0 20px; gap: 12px;
+      position: sticky; top: 0; z-index: 100;
+      box-shadow: 0 1px 4px rgba(0,0,0,.2);
+    }
+    .r-nav-brand { display:flex; align-items:center; gap:8px; text-decoration:none; }
+    .r-nav-icon {
+      width:28px; height:28px; border-radius:7px; background:#3B82F6;
+      display:flex; align-items:center; justify-content:center; font-size:13px; color:#fff;
+    }
+    .r-nav-title { color:#fff; font-weight:700; font-size:14px; }
+    .r-nav-sub { color:#CBD5E1; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+    /* Контент */
+    .r-container { max-width: 900px; margin: 0 auto; padding: 20px 12px 40px; }
+
+    /* Заголовок */
+    .r-header { margin-bottom: 20px; }
+    .r-header h1 { font-size: 20px; font-weight: 700; color: #1E293B; margin: 0 0 4px; }
+    .r-header p  { font-size: 13px; color: #64748B; margin: 0; }
+
+    /* Статистика */
+    .r-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+    @media (max-width: 575px) { .r-stats { grid-template-columns: repeat(2, 1fr); } }
+    .r-stat {
+      background: #fff; border-radius: 10px; padding: 12px 14px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.07);
+    }
+    .r-stat-val  { font-size: 22px; font-weight: 700; color: #1E293B; line-height: 1; }
+    .r-stat-lbl  { font-size: 11px; color: #64748B; margin-top: 3px; }
+
+    /* Фильтры */
+    .r-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+    .r-filters .btn { border-radius: 20px !important; font-size: 13px; padding: 5px 14px; }
+
+    /* Карточки квартир */
+    .apt-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+    @media (max-width: 575px) { .apt-grid { grid-template-columns: 1fr; } }
+
+    .apt-card {
+      background: #fff; border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+      cursor: pointer; transition: box-shadow .2s, transform .15s;
+      overflow: hidden;
+    }
+    .apt-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,.12); transform: translateY(-1px); }
+
+    .apt-card-body { padding: 16px; }
+    .apt-card-number { font-size: 17px; font-weight: 700; color: #1E293B; }
+    .apt-card-building { font-size: 12px; color: #64748B; margin-bottom: 8px; }
+
+    .apt-badge {
+      display: inline-block; font-size: 12px; font-weight: 600;
+      border-radius: 6px; padding: 3px 10px; margin-bottom: 8px;
+    }
+    .apt-badge-ok      { background: #D1FAE5; color: #065F46; }
+    .apt-badge-no      { background: #FEE2E2; color: #991B1B; }
+    .apt-badge-remarks { background: #FEF3C7; color: #92400E; }
+
+    .apt-card-comment {
+      font-size: 13px; color: #475569; line-height: 1.6;
+      display: -webkit-box; -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical; overflow: hidden;
+      margin-bottom: 8px;
+    }
+    .apt-card-footer {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px;
+      border-top: 1px solid #F1F5F9;
+      background: #FAFBFC;
+    }
+    .apt-card-date { font-size: 12px; color: #94A3B8; }
+    .apt-card-photos { font-size: 12px; color: #3B82F6; font-weight: 500; }
+
+    /* Модалка деталей */
+    .modal-content { border-radius: 16px !important; border: none !important; }
+    .modal-header  { border-bottom: 1px solid #E2E8F0 !important; padding: 18px 24px 14px !important; }
+    .modal-footer  { border-top: 1px solid #E2E8F0 !important; padding: 14px 24px !important; }
+    .modal-body    { padding: 20px 24px !important; }
+
+    .detail-status { font-size: 15px; font-weight: 600; padding: 5px 14px; border-radius: 8px; }
+
+    .gallery-main {
+      background: #000; border-radius: 10px; overflow: hidden;
+      display: flex; align-items: center; justify-content: center; min-height: 220px;
+    }
+    .gallery-main img { max-width:100%; max-height:55vh; object-fit:contain; display:block; }
+    .gallery-thumb {
+      width:100%; aspect-ratio:1; object-fit:cover; border-radius:8px;
+      cursor:pointer; transition:opacity .15s; border:2px solid transparent;
+    }
+    .gallery-thumb:hover { opacity:.85; }
+    .gallery-thumb.active { border-color: #3B82F6; }
+
+    .r-footer { text-align:center; color:#94A3B8; font-size:12px; padding: 12px 0 24px; }
+
+    .r-empty { text-align:center; padding:60px 0; color:#94A3B8; }
+  </style>
+</head>
+<body>
+
+{# Навбар #}
+<nav class="r-nav">
+  <a href="#" class="r-nav-brand">
+    <div class="r-nav-icon"><i class="bi bi-building"></i></div>
+    <span class="r-nav-title">Штаб отделки</span>
+  </a>
+  <span class="r-nav-sub">
+    <i class="bi bi-clipboard-check me-1"></i>
+    Приёмка — {{ foreman.full_name if foreman else '—' }}
+  </span>
+  <a href="/acceptance/report/{{ token }}/export"
+     class="btn btn-sm ms-auto"
+     style="background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:8px;font-size:12px;white-space:nowrap;flex-shrink:0">
+    <i class="bi bi-file-earmark-excel me-1"></i>
+    <span class="d-none d-sm-inline">Скачать Excel</span>
+    <span class="d-sm-none">Excel</span>
+  </a>
+</nav>
+
+<div class="r-container">
+
+  {# Заголовок #}
+  <div class="r-header">
+    <h1>Приёмка квартир — {{ foreman.full_name if foreman else '—' }}</h1>
+    <p>
+      {% if building %}
+        <i class="bi bi-buildings me-1"></i>ЖК «{{ building.name }}»
+      {% else %}
+        <i class="bi bi-buildings me-1"></i>Все ЖК
+      {% endif %}
+      &nbsp;·&nbsp;
+      <i class="bi bi-clock me-1"></i>Актуально на {{ now().strftime('%d.%m.%Y %H:%M') }}
+    </p>
+  </div>
+
+  {# Статистика #}
+  <div class="r-stats">
+    <div class="r-stat">
+      <div class="r-stat-val">{{ stats.total }}</div>
+      <div class="r-stat-lbl">Всего квартир</div>
+    </div>
+    <div class="r-stat">
+      <div class="r-stat-val" style="color:#065F46">{{ stats['принята'] }}</div>
+      <div class="r-stat-lbl">Принято</div>
+    </div>
+    <div class="r-stat">
+      <div class="r-stat-val" style="color:#991B1B">{{ stats['не принята'] }}</div>
+      <div class="r-stat-lbl">Не принято</div>
+    </div>
+    <div class="r-stat">
+      <div class="r-stat-val" style="color:#92400E">{{ stats['замечания'] }}</div>
+      <div class="r-stat-lbl">С замечаниями</div>
+    </div>
+  </div>
+
+  {# Фильтры #}
+  <div class="r-filters">
+    <a href="/acceptance/report/{{ token }}?status=all"
+       class="btn btn-sm {% if status_filter == 'all' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+      <i class="bi bi-grid me-1"></i>Все
+    </a>
+    <a href="/acceptance/report/{{ token }}?status=принята"
+       class="btn btn-sm {% if status_filter == 'принята' %}btn-success{% else %}btn-outline-secondary{% endif %}">
+      <i class="bi bi-check-circle me-1"></i>Принята
+      <span class="badge ms-1" style="background:rgba(0,0,0,.15)">{{ stats['принята'] }}</span>
+    </a>
+    <a href="/acceptance/report/{{ token }}?status=не принята"
+       class="btn btn-sm {% if status_filter == 'не принята' %}btn-danger{% else %}btn-outline-secondary{% endif %}">
+      <i class="bi bi-x-circle me-1"></i>Не принята
+      <span class="badge ms-1" style="background:rgba(0,0,0,.15)">{{ stats['не принята'] }}</span>
+    </a>
+    <a href="/acceptance/report/{{ token }}?status=замечания"
+       class="btn btn-sm {% if status_filter == 'замечания' %}btn-warning{% else %}btn-outline-secondary{% endif %}"
+       {% if status_filter == 'замечания' %}style="color:#fff"{% endif %}>
+      <i class="bi bi-exclamation-triangle me-1"></i>Замечания
+      <span class="badge ms-1" style="background:rgba(0,0,0,.15)">{{ stats['замечания'] }}</span>
+    </a>
+  </div>
+
+  {# Список квартир #}
+  {% if acc_data %}
+  <div class="apt-grid">
+    {% for d in acc_data %}
+    {% set r = d.record %}
+    {% set photos = d.photos %}
+
+    <div class="apt-card"
+         data-bs-toggle="modal" data-bs-target="#detailModal"
+         data-apt-number="{{ r.apartment_number | e }}"
+         data-building="{{ r.building_name or '' | e }}"
+         data-status="{{ r.status }}"
+         data-date="{{ r.created_at[:10] if r.created_at else '' }}"
+         data-comment="{{ r.comment or '' | e }}"
+         data-acc-id="{{ r.id }}"
+         data-photos='{{ photos | tojson }}'>
+
+      <div class="apt-card-body">
+        <div class="apt-card-number">Кв. {{ r.apartment_number }}</div>
+        {% if not building %}
+        <div class="apt-card-building">{{ r.building_name or '' }}</div>
+        {% endif %}
+
+        {% if r.status == 'принята' %}
+          <span class="apt-badge apt-badge-ok"><i class="bi bi-check-circle-fill me-1"></i>Принята</span>
+        {% elif r.status == 'не принята' %}
+          <span class="apt-badge apt-badge-no"><i class="bi bi-x-circle-fill me-1"></i>Не принята</span>
+        {% else %}
+          <span class="apt-badge apt-badge-remarks"><i class="bi bi-exclamation-triangle-fill me-1"></i>Замечания</span>
+        {% endif %}
+
+        {% if r.comment and r.comment.strip() %}
+        <div class="apt-card-comment">{{ r.comment }}</div>
+        {% endif %}
+      </div>
+
+      <div class="apt-card-footer">
+        <span class="apt-card-date">
+          <i class="bi bi-calendar2 me-1"></i>{{ r.created_at[:10] if r.created_at else '—' }}
+        </span>
+        {% if photos %}
+        <span class="apt-card-photos">
+          <i class="bi bi-camera-fill me-1"></i>{{ photos | length }} фото
+        </span>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% else %}
+  <div class="r-empty">
+    <i class="bi bi-inbox" style="font-size:3rem"></i>
+    <p class="mt-3">По выбранному фильтру квартир нет.</p>
+    <a href="/acceptance/report/{{ token }}" class="btn btn-outline-secondary btn-sm">Показать все</a>
+  </div>
+  {% endif %}
+
+  <div class="r-footer">Сформировано в Штаб отделки</div>
+</div>
+
+
+{# ══ Модалка: Детали квартиры ════════════════════════════════ #}
+<div class="modal fade" id="detailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title mb-1" id="detailTitle">Квартира</h5>
+          <span id="detailStatusBadge"></span>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        {# Мета #}
+        <div class="d-flex gap-3 mb-3 text-muted small flex-wrap">
+          <span id="detailBuilding"></span>
+          <span><i class="bi bi-calendar2 me-1"></i><span id="detailDate"></span></span>
+        </div>
+        {# Комментарий #}
+        <div id="detailCommentWrap" class="mb-4">
+          <div class="fw-semibold small text-uppercase text-muted mb-1" style="letter-spacing:.4px">Комментарий</div>
+          <div id="detailComment"
+               style="background:#F8FAFC;border-left:3px solid #3B82F6;border-radius:0 8px 8px 0;padding:12px 14px;font-size:14px;color:#334155;line-height:1.7;white-space:pre-line"></div>
+        </div>
+        {# Галерея #}
+        <div id="detailGalleryWrap">
+          <div class="fw-semibold small text-uppercase text-muted mb-2" style="letter-spacing:.4px">Фотографии</div>
+          <div class="gallery-main mb-2" id="detailMainWrap">
+            <img id="detailMainImg" src="" alt="">
+          </div>
+          <div id="detailThumbGrid" class="row g-2"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Закрыть</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const detailModal = document.getElementById('detailModal')
+if (detailModal) {
+  detailModal.addEventListener('show.bs.modal', e => {
+    const b = e.relatedTarget
+    const accId   = b.dataset.accId
+    const status  = b.dataset.status
+    const comment = b.dataset.comment
+    let photos = []
+    try { photos = JSON.parse(b.dataset.photos || '[]') } catch(ex) {}
+
+    document.getElementById('detailTitle').textContent =
+      `Квартира №${b.dataset.aptNumber}`
+
+    // Статус бейдж
+    const statusMap = {
+      'принята':    ['apt-badge-ok',      '<i class="bi bi-check-circle-fill me-1"></i>Принята'],
+      'не принята': ['apt-badge-no',      '<i class="bi bi-x-circle-fill me-1"></i>Не принята'],
+      'замечания':  ['apt-badge-remarks', '<i class="bi bi-exclamation-triangle-fill me-1"></i>Замечания'],
+    }
+    const [cls, html] = statusMap[status] || ['','']
+    const badge = document.getElementById('detailStatusBadge')
+    badge.className = `apt-badge ${cls}`
+    badge.innerHTML = html
+
+    // Мета
+    const bld = b.dataset.building
+    document.getElementById('detailBuilding').innerHTML =
+      bld ? `<i class="bi bi-buildings me-1"></i>${bld}` : ''
+    document.getElementById('detailDate').textContent = b.dataset.date || '—'
+
+    // Комментарий
+    const commentWrap = document.getElementById('detailCommentWrap')
+    if (comment && comment.trim()) {
+      document.getElementById('detailComment').textContent = comment
+      commentWrap.style.display = ''
+    } else {
+      commentWrap.style.display = 'none'
+    }
+
+    // Галерея
+    const galleryWrap = document.getElementById('detailGalleryWrap')
+    const mainImg     = document.getElementById('detailMainImg')
+    const thumbGrid   = document.getElementById('detailThumbGrid')
+    thumbGrid.innerHTML = ''; mainImg.src = ''
+
+    if (photos.length) {
+      galleryWrap.style.display = ''
+      mainImg.src = `/static/acceptance/${accId}/${photos[0].filename}`
+      photos.forEach((p, i) => {
+        const url = `/static/acceptance/${accId}/${p.filename}`
+        const col = document.createElement('div')
+        col.className = 'col-4 col-sm-3 col-md-2'
+        col.innerHTML = `<img src="${url}" class="gallery-thumb${i===0?' active':''}"
+                              alt="" data-url="${url}">`
+        thumbGrid.appendChild(col)
+      })
+      thumbGrid.querySelectorAll('.gallery-thumb').forEach(img => {
+        img.addEventListener('click', function() {
+          mainImg.src = this.dataset.url
+          thumbGrid.querySelectorAll('.gallery-thumb').forEach(t => t.classList.remove('active'))
+          this.classList.add('active')
+        })
+      })
+    } else {
+      galleryWrap.style.display = 'none'
+    }
+  })
+
+  detailModal.addEventListener('hidden.bs.modal', () => {
+    document.getElementById('detailMainImg').src = ''
+    document.getElementById('detailThumbGrid').innerHTML = ''
+  })
+}
+</script>
+</body>
+</html>

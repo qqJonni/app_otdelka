@@ -59,6 +59,14 @@
        href="{{ url_for('admin_dashboard') }}">
       <i class="bi bi-speedometer2"></i>Дашборд
     </a>
+    <a class="crm-nav-link {% if request.endpoint in ['acceptance_list','acceptance_add','acceptance_edit','acceptance_delete','acceptance_photo_delete'] %}active{% endif %}"
+       href="{{ url_for('acceptance_list') }}">
+      <i class="bi bi-clipboard-check"></i>Приёмка квартир
+    </a>
+    <a class="crm-nav-link {% if request.endpoint in ['acceptance_reports','acceptance_report_create','acceptance_report_reset_tok','acceptance_report_delete_tok'] %}active{% endif %}"
+       href="{{ url_for('acceptance_reports') }}">
+      <i class="bi bi-link-45deg"></i>Отчёты по приёмке
+    </a>
     <span class="crm-section-label">Объекты</span>
     <a class="crm-nav-link {% if request.endpoint in ['admin_buildings','admin_building_add','admin_building_edit'] %}active{% endif %}"
        href="{{ url_for('admin_buildings') }}">
@@ -93,6 +101,14 @@
     <a class="crm-nav-link {% if request.endpoint == 'foreman_dashboard' %}active{% endif %}"
        href="{{ url_for('foreman_dashboard') }}">
       <i class="bi bi-house-door"></i>Мои квартиры
+    </a>
+    <a class="crm-nav-link {% if request.endpoint in ['acceptance_list','acceptance_add','acceptance_edit','acceptance_delete','acceptance_photo_delete'] %}active{% endif %}"
+       href="{{ url_for('acceptance_list') }}">
+      <i class="bi bi-clipboard-check"></i>Приёмка квартир
+    </a>
+    <a class="crm-nav-link {% if request.endpoint in ['acceptance_reports','acceptance_report_create','acceptance_report_reset_tok','acceptance_report_delete_tok'] %}active{% endif %}"
+       href="{{ url_for('acceptance_reports') }}">
+      <i class="bi bi-link-45deg"></i>Отчёты по приёмке
     </a>
   {% endif %}
 

@@ -5,6 +5,7 @@ __pycache__/
 *.db
 static/avatars/
 static/uploads/
+static/acceptance/
 .env
 .DS_Store
 Thumbs.db

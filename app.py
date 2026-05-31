@@ -1,4 +1,5 @@
 import os
+import shutil
 import sqlite3
 import secrets
 import io
@@ -6,7 +7,7 @@ from datetime import datetime, date, timedelta
 from functools import wraps
 
 from flask import (Flask, render_template, redirect, url_for, request,
-                   flash, session, g, send_file, abort)
+                   flash, session, g, send_file, abort, jsonify)
 from flask_login import (LoginManager, UserMixin, login_user, logout_user,
                          login_required, current_user)
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -24,6 +25,9 @@ ALLOWED_AVATAR_EXT = {'jpg', 'jpeg', 'png'}
 UPLOAD_FOLDER = os.path.join(app.root_path, 'static', 'uploads')
 ALLOWED_PHOTO_EXT = {'jpg', 'jpeg', 'png', 'heic'}
 MAX_PHOTOS_PER_STAGE = 30  # максимум фото на один этап
+
+ACCEPTANCE_FOLDER = os.path.join(app.root_path, 'static', 'acceptance')
+ACCEPTANCE_STATUSES = ['принята', 'не принята', 'замечания']
 
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
@@ -209,11 +213,40 @@ def run_migrations(db):
     if 'unit' not in cols:
         db.execute("ALTER TABLE apartment_stages ADD COLUMN unit TEXT NOT NULL DEFAULT 'м2'")
 
+    # Таблицы приёмки квартир
+    db.executescript('''
+        CREATE TABLE IF NOT EXISTS acceptance (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            building_id INTEGER NOT NULL REFERENCES buildings(id) ON DELETE CASCADE,
+            apartment_number TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'замечания',
+            foreman_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            comment TEXT,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS acceptance_photos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            acceptance_id INTEGER NOT NULL REFERENCES acceptance(id) ON DELETE CASCADE,
+            filename TEXT NOT NULL,
+            uploaded_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS acceptance_report_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            foreman_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            building_id INTEGER REFERENCES buildings(id) ON DELETE CASCADE,
+            token TEXT UNIQUE NOT NULL,
+            created_at TEXT DEFAULT (datetime('now')),
+            created_by INTEGER REFERENCES users(id) ON DELETE SET NULL
+        );
+    ''')
+
     db.commit()
 
     # Создать папки для файлов
     os.makedirs(AVATAR_FOLDER, exist_ok=True)
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    os.makedirs(ACCEPTANCE_FOLDER, exist_ok=True)
 
 
 def init_db():
@@ -288,7 +321,40 @@ def init_db():
             key TEXT UNIQUE NOT NULL,
             value TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS acceptance (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            building_id INTEGER NOT NULL REFERENCES buildings(id) ON DELETE CASCADE,
+            apartment_number TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'замечания',
+            foreman_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            comment TEXT,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS acceptance_photos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            acceptance_id INTEGER NOT NULL REFERENCES acceptance(id) ON DELETE CASCADE,
+            filename TEXT NOT NULL,
+            uploaded_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS acceptance_report_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            foreman_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            building_id INTEGER REFERENCES buildings(id) ON DELETE CASCADE,
+            token TEXT UNIQUE NOT NULL,
+            created_at TEXT DEFAULT (datetime('now')),
+            created_by INTEGER REFERENCES users(id) ON DELETE SET NULL
+        );
     ''')
+    # Удалить устаревшую таблицу acceptance_guest_tokens если существует
+    tables = [r[0] for r in db.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    ).fetchall()]
+    if 'acceptance_guest_tokens' in tables:
+        db.execute('DROP TABLE acceptance_guest_tokens')
     db.commit()
 
     # Run migrations for existing databases (adds columns if missing)
@@ -504,6 +570,7 @@ STATUS_LABEL = {
 app.jinja_env.globals['STATUS_LABEL'] = STATUS_LABEL
 app.jinja_env.globals['now'] = datetime.now
 app.jinja_env.globals['UNITS'] = UNITS
+app.jinja_env.globals['ACCEPTANCE_STATUSES'] = ACCEPTANCE_STATUSES
 
 
 # ─── Auth routes ─────────────────────────────────────────────────────────────
@@ -850,6 +917,375 @@ def guest_export(token):
     buf.seek(0)
     bname = building['name'].replace(' ', '_').replace('/', '-')
     filename = f'сводка_{bname}.xlsx'
+    return send_file(buf, download_name=filename, as_attachment=True,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+# ─── Acceptance (Приёмка квартир) ────────────────────────────────────────────
+
+def _save_acceptance_photos(acc_id, files):
+    """Сохраняет загруженные файлы фото приёмки."""
+    folder = os.path.join(ACCEPTANCE_FOLDER, str(acc_id))
+    os.makedirs(folder, exist_ok=True)
+    allowed = {'jpg', 'jpeg', 'png', 'heic'}
+    for f in files:
+        if not f or not f.filename:
+            continue
+        ext = f.filename.rsplit('.', 1)[-1].lower() if '.' in f.filename else ''
+        if ext not in allowed:
+            continue
+        fname = f'{secrets.token_hex(10)}.{ext}'
+        f.save(os.path.join(folder, fname))
+        execute_db(
+            "INSERT INTO acceptance_photos (acceptance_id, filename, uploaded_at) "
+            "VALUES (?,?,datetime('now'))",
+            [acc_id, fname]
+        )
+
+
+@app.route('/acceptance')
+@login_required
+def acceptance_list():
+    buildings = query_db('SELECT * FROM buildings ORDER BY name')
+    foremen   = query_db(
+        "SELECT * FROM users WHERE role IN ('foreman','admin') ORDER BY full_name"
+    )
+    records = query_db(
+        '''SELECT ac.*, b.name as building_name, u.full_name as foreman_name
+           FROM acceptance ac
+           LEFT JOIN buildings b ON ac.building_id = b.id
+           LEFT JOIN users u ON ac.foreman_id = u.id
+           ORDER BY ac.created_at DESC'''
+    )
+    acc_data = []
+    for r in records:
+        photos = query_db(
+            'SELECT * FROM acceptance_photos WHERE acceptance_id=? ORDER BY uploaded_at',
+            [r['id']]
+        )
+        acc_data.append({'record': r, 'photos': [dict(p) for p in photos]})
+    return render_template('acceptance/list.html',
+                           acc_data=acc_data, buildings=buildings, foremen=foremen)
+
+
+@app.route('/acceptance/add', methods=['POST'])
+@login_required
+def acceptance_add():
+    building_id = request.form.get('building_id') or None
+    apt_number  = request.form.get('apartment_number', '').strip()
+    status      = request.form.get('status', 'замечания')
+    if status not in ACCEPTANCE_STATUSES:
+        status = 'замечания'
+    foreman_id = request.form.get('foreman_id') or None
+    comment    = request.form.get('comment', '').strip()
+
+    if not building_id or not apt_number:
+        flash('Укажите ЖК и номер квартиры.', 'danger')
+        return redirect(url_for('acceptance_list'))
+
+    acc_id = execute_db(
+        '''INSERT INTO acceptance
+           (building_id, apartment_number, status, foreman_id, comment,
+            created_at, updated_at)
+           VALUES (?,?,?,?,?,datetime('now'),datetime('now'))''',
+        [building_id, apt_number, status, foreman_id, comment]
+    )
+    _save_acceptance_photos(acc_id, request.files.getlist('photos'))
+    flash(f'Квартира №{apt_number} добавлена в раздел приёмки.', 'success')
+    return redirect(url_for('acceptance_list'))
+
+
+@app.route('/acceptance/<int:acc_id>/edit', methods=['POST'])
+@login_required
+def acceptance_edit(acc_id):
+    record = query_db('SELECT * FROM acceptance WHERE id=?', [acc_id], one=True)
+    if not record:
+        abort(404)
+    building_id = request.form.get('building_id') or None
+    apt_number  = request.form.get('apartment_number', '').strip()
+    status      = request.form.get('status', 'замечания')
+    if status not in ACCEPTANCE_STATUSES:
+        status = 'замечания'
+    foreman_id = request.form.get('foreman_id') or None
+    comment    = request.form.get('comment', '').strip()
+
+    execute_db(
+        '''UPDATE acceptance
+           SET building_id=?, apartment_number=?, status=?, foreman_id=?,
+               comment=?, updated_at=datetime('now')
+           WHERE id=?''',
+        [building_id, apt_number, status, foreman_id, comment, acc_id]
+    )
+    _save_acceptance_photos(acc_id, request.files.getlist('photos'))
+    flash('Запись приёмки обновлена.', 'success')
+    return redirect(url_for('acceptance_list'))
+
+
+@app.route('/acceptance/<int:acc_id>/delete', methods=['POST'])
+@login_required
+def acceptance_delete(acc_id):
+    record = query_db('SELECT * FROM acceptance WHERE id=?', [acc_id], one=True)
+    if not record:
+        abort(404)
+    folder = os.path.join(ACCEPTANCE_FOLDER, str(acc_id))
+    if os.path.exists(folder):
+        shutil.rmtree(folder)
+    execute_db('DELETE FROM acceptance WHERE id=?', [acc_id])
+    flash(f'Запись квартиры №{record["apartment_number"]} удалена.', 'success')
+    return redirect(url_for('acceptance_list'))
+
+
+@app.route('/acceptance/<int:acc_id>/photo/<int:photo_id>/delete', methods=['POST'])
+@login_required
+def acceptance_photo_delete(acc_id, photo_id):
+    photo = query_db(
+        'SELECT * FROM acceptance_photos WHERE id=? AND acceptance_id=?',
+        [photo_id, acc_id], one=True
+    )
+    if not photo:
+        return jsonify({'ok': False, 'error': 'not found'}), 404
+    fpath = os.path.join(ACCEPTANCE_FOLDER, str(acc_id), photo['filename'])
+    if os.path.exists(fpath):
+        os.remove(fpath)
+    execute_db('DELETE FROM acceptance_photos WHERE id=?', [photo_id])
+    return jsonify({'ok': True})
+
+
+@app.route('/acceptance/reports')
+@login_required
+def acceptance_reports():
+    buildings = query_db('SELECT * FROM buildings ORDER BY name')
+    foremen   = query_db("SELECT * FROM users WHERE role='foreman' ORDER BY full_name")
+
+    if current_user.role == 'admin':
+        reports = query_db(
+            '''SELECT art.*, u.full_name as foreman_name, b.name as building_name
+               FROM acceptance_report_tokens art
+               LEFT JOIN users u ON art.foreman_id = u.id
+               LEFT JOIN buildings b ON art.building_id = b.id
+               ORDER BY art.created_at DESC'''
+        )
+    else:
+        reports = query_db(
+            '''SELECT art.*, u.full_name as foreman_name, b.name as building_name
+               FROM acceptance_report_tokens art
+               LEFT JOIN users u ON art.foreman_id = u.id
+               LEFT JOIN buildings b ON art.building_id = b.id
+               WHERE art.foreman_id=?
+               ORDER BY art.created_at DESC''',
+            [current_user.id]
+        )
+
+    report_data = []
+    for r in reports:
+        if r['building_id']:
+            cnt = query_db(
+                'SELECT COUNT(*) as c FROM acceptance WHERE foreman_id=? AND building_id=?',
+                [r['foreman_id'], r['building_id']], one=True
+            )['c']
+        else:
+            cnt = query_db(
+                'SELECT COUNT(*) as c FROM acceptance WHERE foreman_id=?',
+                [r['foreman_id']], one=True
+            )['c']
+        report_data.append({'report': r, 'apt_count': cnt})
+
+    return render_template('acceptance/reports.html',
+                           report_data=report_data,
+                           buildings=buildings, foremen=foremen)
+
+
+@app.route('/acceptance/reports/count')
+@login_required
+def acceptance_report_count():
+    foreman_id  = request.args.get('foreman_id')
+    building_id = request.args.get('building_id') or None
+    if not foreman_id:
+        return jsonify({'count': 0})
+    if building_id:
+        cnt = query_db(
+            'SELECT COUNT(*) as c FROM acceptance WHERE foreman_id=? AND building_id=?',
+            [foreman_id, building_id], one=True
+        )['c']
+    else:
+        cnt = query_db(
+            'SELECT COUNT(*) as c FROM acceptance WHERE foreman_id=?',
+            [foreman_id], one=True
+        )['c']
+    return jsonify({'count': cnt})
+
+
+@app.route('/acceptance/reports/create', methods=['POST'])
+@login_required
+def acceptance_report_create():
+    # Бригадир может создавать отчёт только по себе
+    if current_user.role == 'admin':
+        foreman_id = request.form.get('foreman_id') or None
+    else:
+        foreman_id = current_user.id
+
+    building_id = request.form.get('building_id') or None
+    if not foreman_id:
+        flash('Укажите бригадира.', 'danger')
+        return redirect(url_for('acceptance_reports'))
+
+    token = secrets.token_urlsafe(28)
+    execute_db(
+        '''INSERT INTO acceptance_report_tokens
+           (foreman_id, building_id, token, created_at, created_by)
+           VALUES (?,?,?,datetime('now'),?)''',
+        [foreman_id, building_id, token, current_user.id]
+    )
+    flash('Отчёт создан. Ссылка скопирована в буфер обмена.', 'success')
+    return redirect(url_for('acceptance_reports'))
+
+
+@app.route('/acceptance/reports/<int:rep_id>/reset', methods=['POST'])
+@login_required
+def acceptance_report_reset_tok(rep_id):
+    rep = query_db('SELECT * FROM acceptance_report_tokens WHERE id=?', [rep_id], one=True)
+    if not rep:
+        abort(404)
+    if current_user.role != 'admin' and rep['foreman_id'] != current_user.id:
+        abort(403)
+    token = secrets.token_urlsafe(28)
+    execute_db('UPDATE acceptance_report_tokens SET token=? WHERE id=?', [token, rep_id])
+    return jsonify({'token': token, 'url': f'/acceptance/report/{token}'})
+
+
+@app.route('/acceptance/reports/<int:rep_id>/delete', methods=['POST'])
+@login_required
+def acceptance_report_delete_tok(rep_id):
+    rep = query_db('SELECT * FROM acceptance_report_tokens WHERE id=?', [rep_id], one=True)
+    if not rep:
+        abort(404)
+    if current_user.role != 'admin' and rep['foreman_id'] != current_user.id:
+        abort(403)
+    execute_db('DELETE FROM acceptance_report_tokens WHERE id=?', [rep_id])
+    flash('Отчёт удалён.', 'success')
+    return redirect(url_for('acceptance_reports'))
+
+
+@app.route('/acceptance/report/<token>')
+def acceptance_report_guest(token):
+    tok = query_db(
+        'SELECT * FROM acceptance_report_tokens WHERE token=?', [token], one=True
+    )
+    if not tok:
+        abort(404)
+    foreman  = query_db('SELECT * FROM users WHERE id=?', [tok['foreman_id']], one=True)
+    building = None
+    if tok['building_id']:
+        building = query_db('SELECT * FROM buildings WHERE id=?', [tok['building_id']], one=True)
+
+    base_q = '''SELECT ac.*, b.name as building_name
+                FROM acceptance ac
+                LEFT JOIN buildings b ON ac.building_id = b.id
+                WHERE ac.foreman_id=?'''
+    base_args = [tok['foreman_id']]
+    if tok['building_id']:
+        base_q    += ' AND ac.building_id=?'
+        base_args.append(tok['building_id'])
+    base_q += ' ORDER BY b.name, ac.apartment_number'
+
+    all_records = query_db(base_q, base_args)
+
+    stats = {
+        'total':       len(all_records),
+        'принята':     sum(1 for r in all_records if r['status'] == 'принята'),
+        'не принята':  sum(1 for r in all_records if r['status'] == 'не принята'),
+        'замечания':   sum(1 for r in all_records if r['status'] == 'замечания'),
+    }
+
+    status_filter = request.args.get('status', 'all')
+    if status_filter in ACCEPTANCE_STATUSES:
+        filtered = [r for r in all_records if r['status'] == status_filter]
+    else:
+        status_filter = 'all'
+        filtered = list(all_records)
+
+    acc_data = []
+    for r in filtered:
+        photos = query_db(
+            'SELECT * FROM acceptance_photos WHERE acceptance_id=? ORDER BY uploaded_at',
+            [r['id']]
+        )
+        acc_data.append({'record': dict(r), 'photos': [dict(p) for p in photos]})
+
+    return render_template('acceptance/report_guest.html',
+                           tok=tok, foreman=foreman, building=building,
+                           acc_data=acc_data, stats=stats,
+                           status_filter=status_filter, token=token)
+
+
+@app.route('/acceptance/report/<token>/export')
+def acceptance_report_export(token):
+    tok = query_db(
+        'SELECT * FROM acceptance_report_tokens WHERE token=?', [token], one=True
+    )
+    if not tok:
+        abort(404)
+    foreman  = query_db('SELECT * FROM users WHERE id=?', [tok['foreman_id']], one=True)
+    building = None
+    if tok['building_id']:
+        building = query_db('SELECT * FROM buildings WHERE id=?', [tok['building_id']], one=True)
+
+    base_q = '''SELECT ac.*, b.name as building_name, b.address as building_address
+                FROM acceptance ac
+                LEFT JOIN buildings b ON ac.building_id = b.id
+                WHERE ac.foreman_id=?'''
+    base_args = [tok['foreman_id']]
+    if tok['building_id']:
+        base_q += ' AND ac.building_id=?'
+        base_args.append(tok['building_id'])
+    base_q += ' ORDER BY b.name, ac.apartment_number'
+    records = query_db(base_q, base_args)
+
+    STATUS_RU_ACC = {'принята': 'Принята', 'не принята': 'Не принята', 'замечания': 'Замечания'}
+
+    wb  = openpyxl.Workbook()
+    ws  = wb.active
+    ws.title = 'Приёмка квартир'
+    ws.freeze_panes = 'A2'
+
+    hfill = PatternFill(fill_type='solid', fgColor='1E3A5F')
+    hfont = Font(bold=True, color='FFFFFF', size=11)
+    halign= Alignment(horizontal='center', vertical='center', wrap_text=True)
+    ws.row_dimensions[1].height = 28
+
+    done_fill    = PatternFill(fill_type='solid', fgColor='D1FAE5')
+    danger_fill  = PatternFill(fill_type='solid', fgColor='FEE2E2')
+    warn_fill    = PatternFill(fill_type='solid', fgColor='FEF3C7')
+
+    headers = ['Квартира', 'ЖК', 'Статус', 'Дата приёмки', 'Комментарий']
+    for ci, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=ci, value=h)
+        cell.font = hfont; cell.fill = hfill; cell.alignment = halign
+
+    for ri, r in enumerate(records, 2):
+        status_ru = STATUS_RU_ACC.get(r['status'], r['status'])
+        row_fill  = done_fill if r['status']=='принята' else (danger_fill if r['status']=='не принята' else warn_fill)
+        vals = [
+            r['apartment_number'],
+            r['building_name'] or '',
+            status_ru,
+            r['created_at'][:10] if r['created_at'] else '',
+            r['comment'] or '',
+        ]
+        for ci, v in enumerate(vals, 1):
+            cell = ws.cell(row=ri, column=ci, value=v)
+            cell.fill = row_fill
+            cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=(ci==5))
+
+    for col in ws.columns:
+        ws.column_dimensions[col[0].column_letter].width = min(
+            max(len(str(c.value or '')) for c in col) + 4, 50
+        )
+
+    buf = io.BytesIO()
+    wb.save(buf); buf.seek(0)
+    fname_base = foreman['full_name'] if foreman else 'отчёт'
+    filename = f'приёмка_{fname_base}.xlsx'.replace(' ', '_')
     return send_file(buf, download_name=filename, as_attachment=True,
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
