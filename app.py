@@ -600,19 +600,109 @@ def guest_view(token):
     apartments = query_db(
         'SELECT * FROM apartments WHERE building_id=? ORDER BY number', [gt['building_id']]
     )
-    apt_data = []
+
+    # Собираем данные по всем квартирам
+    all_apt_data = []
     for apt in apartments:
         stages = query_db(
             'SELECT * FROM apartment_stages WHERE apartment_id=? ORDER BY order_num',
             [apt['id']]
         )
         total = len(stages)
-        done = sum(1 for s in stages if s['status'] == 'done')
-        pct = int(done / total * 100) if total else 0
-        apt_data.append({'apt': apt, 'stages': stages, 'pct': pct})
+        done  = sum(1 for s in stages if s['status'] == 'done')
+        pct   = int(done / total * 100) if total else 0
+        has_active  = any(s['status'] in ('in_progress', 'rework') for s in stages)
+        has_overdue = any(s['status'] == 'overdue' for s in stages)
+        all_apt_data.append({
+            'apt': apt, 'stages': stages, 'pct': pct,
+            'has_active': has_active, 'has_overdue': has_overdue,
+        })
+
+    # Статистика по всем квартирам (не меняется при фильтре)
+    stats = {
+        'total':    len(all_apt_data),
+        'active':   sum(1 for d in all_apt_data if d['has_active'] and not d['apt']['completed_at']),
+        'done':     sum(1 for d in all_apt_data if d['apt']['completed_at']),
+        'overdue':  sum(1 for d in all_apt_data if d['has_overdue']),
+    }
+
+    # Применяем фильтр
+    f = request.args.get('filter', 'all')
+    if f == 'active':
+        apt_data = [d for d in all_apt_data if d['has_active'] and not d['apt']['completed_at']]
+    elif f == 'completed':
+        apt_data = [d for d in all_apt_data if d['apt']['completed_at']]
+    elif f == 'overdue':
+        apt_data = [d for d in all_apt_data if d['has_overdue']]
+    else:
+        f = 'all'
+        apt_data = all_apt_data
 
     return render_template('guest/view.html',
-                           building=building, apt_data=apt_data, token=token)
+                           building=building, apt_data=apt_data,
+                           stats=stats, active_filter=f, token=token)
+
+
+@app.route('/guest/<token>/export')
+def guest_export(token):
+    """Скачать Excel-сводку по ЖК для гостя."""
+    gt = query_db('SELECT * FROM guest_tokens WHERE token=?', [token], one=True)
+    if not gt:
+        abort(404)
+    building = query_db('SELECT * FROM buildings WHERE id=?', [gt['building_id']], one=True)
+
+    rows = query_db(
+        '''SELECT a.number, s.stage_name, s.status, s.volume_sqm, s.unit,
+                  s.deadline, s.completed_at
+           FROM apartment_stages s
+           JOIN apartments a ON s.apartment_id = a.id
+           WHERE a.building_id=?
+           ORDER BY a.number, s.order_num''',
+        [gt['building_id']]
+    )
+
+    STATUS_RU = {
+        'not_started': 'Не начат',
+        'in_progress': 'В работе',
+        'done':        'Завершён',
+        'overdue':     'Просрочен',
+        'rework':      'На доработку',
+    }
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Сводка'
+
+    header_fill = PatternFill(fill_type='solid', fgColor='4472C4')
+    header_font = Font(bold=True, color='FFFFFF')
+
+    headers = ['Квартира', 'Этап', 'Статус', 'Объём', 'Ед. изм.', 'Дедлайн', 'Завершён']
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center')
+
+    for i, row in enumerate(rows, 2):
+        ws.cell(row=i, column=1, value=row['number'])
+        ws.cell(row=i, column=2, value=row['stage_name'])
+        ws.cell(row=i, column=3, value=STATUS_RU.get(row['status'], row['status']))
+        ws.cell(row=i, column=4, value=row['volume_sqm'])
+        ws.cell(row=i, column=5, value=row['unit'] or 'м2')
+        ws.cell(row=i, column=6, value=row['deadline'] or '')
+        completed = row['completed_at']
+        ws.cell(row=i, column=7, value=completed[:10] if completed else '')
+
+    for col in ws.columns:
+        max_len = max(len(str(cell.value or '')) for cell in col)
+        ws.column_dimensions[col[0].column_letter].width = max_len + 4
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    filename = f'сводка_{building["name"]}.xlsx'.replace(' ', '_')
+    return send_file(buf, download_name=filename, as_attachment=True,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
 # ─── Admin: Dashboard ────────────────────────────────────────────────────────
